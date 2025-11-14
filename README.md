@@ -1,5 +1,4 @@
-# ecosystem-devtools
-## Nova Ecosystem: Development Tools
+# Nova Ecosystem: Development Tools
 
 This repository is a "factory," not a "product." Its sole purpose is to build, test, and publish the common, pre-built base images used for development (DevContainers) across all repositories in the nova-ecosystem organization.
 
