@@ -12,8 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install common global Node.js tools
+# NOTE: We removed 'yarn' from this list because it is already 
+# pre-installed in the base 'node' image.
 RUN npm install -g \
-    yarn \
     nodemon \
     typescript
 

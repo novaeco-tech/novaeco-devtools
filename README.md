@@ -11,19 +11,22 @@ Centralizing these base images gives us two major advantages:
 
 This repository builds and publishes the following images to the GitHub Container Registry (GHCR):
 
-  * `ghcr.io/nova-ecosystem/dev-python:latest`
-  * `ghcr.io/nova-ecosystem/dev-node:latest`
+  * `ghcr.io/nova-ecosystem/dev-python:latest` (For API/Worker services)
+  * `ghcr.io/nova-ecosystem/dev-node:latest` (For App/Website services)
 
-## 🚀 How to Use These Images
+-----
 
-Do **not** clone this repository for monorepo development.
+## 🚀 Consumer Guide: How to Use These Images
 
-Instead, in your monorepos (e.g., `ecosystem-core`, `hub`), reference these images in your `.devcontainer/docker-compose.yml` file.
+**For Developers working on Pillars (Hub, Agro, Finance):**
 
-### Example: `.devcontainer/docker-compose.yml`
+Do **not** clone this repository. Instead, in your pillar monorepo (e.g., `hub`), reference these images in your `.devcontainer/docker-compose.yml` file.
 
-This example from `ecosystem-core` shows how to use the pre-built images. Notice the `image:` key is used instead of `build:`.
-```
+### Example: `hub/.devcontainer/docker-compose.yml`
+
+Notice the `image:` key is used instead of `build:`.
+
+```yaml
 version: '3.8'
 services:
   app:
@@ -32,7 +35,6 @@ services:
     volumes:
       - ..:/workspace:cached
     working_dir: /workspace/app
-    # Keep the container alive for development
     command: sleep infinity
 
   api:
@@ -42,5 +44,38 @@ services:
       - ..:/workspace:cached
     working_dir: /workspace/api
     command: sleep infinity
-
 ```
+
+---
+
+## 🛠️ Maintainer Guide: How to Develop This Repo
+
+**For DevOps Engineers modifying the base images:**
+
+This repository creates the foundation for everyone else. Since it cannot depend on itself, it uses a standard **Docker-in-Docker** environment for its own development.
+
+### 1. Bootstrapping Your Environment
+1. Clone this repository.
+2. Open it in VS Code.
+3. When prompted, click **"Reopen in Container"**.
+   * *Note: This uses a generic `mcr.microsoft.com/devcontainers/base:ubuntu` image defined in this repo's `.devcontainer/` folder.*
+
+### 2. Building & Testing Locally
+You can build the images locally to verify your changes before pushing.
+
+```bash
+# Build the Python image locally to test
+docker build -t test-python ./python
+
+# Build the Node image locally to test
+docker build -t test-node ./node
+````
+
+### 3\. Publishing New Versions
+
+Do not manually push images to GHCR from your laptop.
+
+1.  Commit your changes to the `main` branch.
+2.  The **GitHub Actions Workflow** (`publish-dev-images.yml`) will automatically trigger.
+3.  It will build the images and push them to `ghcr.io/nova-ecosystem/...`.
+4.  Other developers can pull the new updates by running `Dev Containers: Rebuild Container` in their repos.

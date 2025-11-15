@@ -1,0 +1,17 @@
+{
+    "name": "DevTools Maintainer Environment",
+    // We use a generic Ubuntu image to bootstrap this repo
+    "image": "mcr.microsoft.com/devcontainers/base:bullseye",
+    "features": {
+        // Enable Docker-in-Docker so we can build images inside this container
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-azuretools.vscode-docker",
+                "redhat.vscode-yaml"
+            ]
+        }
+    }
+}
