@@ -1,6 +1,7 @@
 import os
 import json
 import sys
+import argparse
 
 # Configuration: Define what distinct services look like and where their version lives
 SERVICE_TYPES = {
@@ -14,7 +15,23 @@ GLOBAL_FILE = "GLOBAL_VERSION"
 
 def register_subcommand(subparsers):
     """Registers this module's commands with the main parser."""
-    parser = subparsers.add_parser("version", help="Manage ecosystem versions")
+    
+    # Define the examples to show in the help output
+    examples = """Examples:
+  # Patch a specific service (bug fix)
+  nova version patch api
+  
+  # Create a new release (feature)
+  nova version release minor
+  nova version release major
+"""
+
+    parser = subparsers.add_parser(
+        "version", 
+        help="Manage ecosystem versions",
+        formatter_class=argparse.RawDescriptionHelpFormatter, # <--- Preserves newlines
+        epilog=examples # <--- Adds the examples at the bottom
+    )
     
     # Add sub-actions for 'version'
     v_subs = parser.add_subparsers(dest="version_command", required=True)
@@ -114,7 +131,7 @@ def execute(args):
     services = detect_services()
     if not services:
         print("Warning: No standard service files (api/VERSION, website/package.json, etc.) found.")
-        # We don't exit because maybe they just want to see help, but for ops we check:
+        # We don't exit because maybe they just want to see help
     
     if args.version_command == "patch":
         execute_patch(args.service, services)
