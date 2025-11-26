@@ -8,7 +8,8 @@ The **NovaEco CLI** (package: `novaeco-cli`) is our internal Python tool used to
 
 ### Installation
 
-Since this is an internal tool, we install it directly from the repository source. You do not need to configure a private registry.
+Since this is an internal tool, we install it directly from the repository source.
+You do not need to configure a private registry.
 
 **1. Install the latest version:**
 ```bash
@@ -16,7 +17,28 @@ Since this is an internal tool, we install it directly from the repository sourc
 pip install "git+https://github.com/novaeco-tech/ecosystem-devtools.git@main#subdirectory=novaeco-cli"
 ````
 
-**2. Update to the latest version:**
+**2. Configure your PATH (Important):**
+If you see a warning during installation like:
+
+> *WARNING: The script novaeco is installed in '/home/user/.local/bin' which is not on PATH.*
+
+You must add that directory to your shell configuration so your terminal can find the `novaeco` command.
+
+**For Zsh users (default on macOS & newer Linux):**
+
+```bash
+echo 'export PATH=$PATH:$HOME/.local/bin' >> ~/.zshrc
+source ~/.zshrc
+```
+
+**For Bash users:**
+
+```bash
+echo 'export PATH=$PATH:$HOME/.local/bin' >> ~/.bashrc
+source ~/.bashrc
+```
+
+**3. Update to the latest version:**
 If a teammate pushes a fix, run this to update your local machine:
 
 ```bash
