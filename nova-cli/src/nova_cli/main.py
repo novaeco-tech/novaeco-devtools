@@ -1,7 +1,6 @@
 import argparse
 import sys
-# Import your submodules here
-from nova_cli.commands import version
+from nova_cli.commands import version, workspace
 
 def main():
     parser = argparse.ArgumentParser(
@@ -11,17 +10,17 @@ def main():
     
     subparsers = parser.add_subparsers(dest="main_command", help="Available commands")
 
-    # Register subcommands from modules
+    # Register subcommands
     version.register_subcommand(subparsers)
+    workspace.register_subcommand(subparsers)
 
-    # Parse arguments
     args = parser.parse_args()
 
-    # Route to the correct module
     if args.main_command == "version":
         version.execute(args)
+    elif args.main_command == "init":
+        workspace.execute(args)
     else:
-        # If no command is provided, print help
         parser.print_help()
         sys.exit(1)
 

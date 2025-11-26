@@ -23,7 +23,47 @@ If a teammate pushes a fix, run this to update your local machine:
 pip install --upgrade "git+https://github.com/nova-ecosystem/ecosystem-devtools.git@main#subdirectory=nova-cli"
 ```
 
+-----
+
+## ⚡ Environment Setup (Bootstrap)
+
+New developers can bootstrap the entire Nova Ecosystem environment (cloning all repositories and generating a unified VS Code workspace) using the `nova init` command. This replaces manual cloning and configuration.
+
+### Prerequisites
+
+1.  **Python 3.10+**
+2.  **Git**
+3.  **GitHub CLI (`gh`)** — [Installation Guide](https://cli.github.com/)
+      * *Note: You must run `gh auth login` to authenticate before initializing the environment.*
+
 ### Usage
+
+**1. Initialize the Environment:**
+Navigate to the folder where you want your project root to be, then run:
+
+```bash
+nova init
+```
+
+This command will:
+
+1.  Query the `novaeco-tech` GitHub organization.
+2.  Dynamically sort repositories based on their topics (`ecosystem`, `enabler`, `sector`, etc.).
+3.  Clone all missing repositories into a `./repos` directory.
+4.  Generate a `novaeco.code-workspace` file configured with the correct folder structure.
+
+**2. Open the Workspace:**
+Open the generated workspace file in VS Code to see the full "System-of-Systems" view:
+
+```bash
+code novaeco.code-workspace
+```
+
+-----
+
+## 📦 Versioning & Release Management
+
+Once your environment is set up, use the CLI to manage service versions.
 
 **1. Patching a Service**
 Used when fixing bugs. Increments the patch version (e.g., `1.0.0` -\> `1.0.1`) for a specific service.
