@@ -36,7 +36,7 @@ def fetch_repos():
     cmd = [
         "gh", "repo", "list", ORG_NAME,
         "--limit", "1000",
-        "--json", "name,sshUrl,topics",
+        "--json", "name,sshUrl,repositoryTopics", 
         "--no-archived"
     ]
     try:
@@ -52,10 +52,14 @@ def categorize_repos(repo_list):
     categorized["uncategorized"] = []
 
     for repo in repo_list:
-        repo_topics = repo.get("topics", [])
+        # Flatten the nested dictionary structure
+        # 'repositoryTopics' comes as: [{'name': 'topic1'}, {'name': 'topic2'}]
+        raw_topics = repo.get("repositoryTopics", [])
+        repo_topics = [t["name"] for t in raw_topics]
+        
         assigned = False
         
-        # Check topics in priority order (e.g. if it has 'ecosystem' and 'meta', 'meta' wins)
+        # Check topics in priority order
         for topic in TOPIC_PRIORITY:
             if topic in repo_topics:
                 categorized[topic].append(repo)
@@ -111,8 +115,6 @@ def generate_workspace_json(categorized_repos):
     for topic in TOPIC_PRIORITY:
         repos = categorized_repos.get(topic, [])
         if repos:
-            # Add a visual separator in the JSON (VS Code ignores pathless entries or comments, 
-            # but we can't easily add comments to JSON output. We rely on order.)
             add_group(repos)
 
     # Add uncategorized at the bottom
@@ -131,7 +133,7 @@ def generate_workspace_json(categorized_repos):
                 "**/Thumbs.db": true,
                 "**/node_modules": True,
                 "**/__pycache__": True,
-                "**/.venv": True
+                "**/.venv": true
             },
             "explorer.compactFolders": False
         }

@@ -1,10 +1,10 @@
-# Nova Ecosystem DevTools
+# NovaEco DevTools
 
-This repository hosts shared developer tooling, Docker images, and scripts used across the Nova Ecosystem organization.
+This repository hosts shared developer tooling, Docker images, and scripts used across the NovaEco organization.
 
-## 🛠️ Nova CLI
+## 🛠️ NovaEco CLI
 
-The **Nova CLI** (package: `novaeco-cli`) is our internal Python tool used to manage versioning, releases, and automation across our monorepos and microservices.
+The **NovaEco CLI** (package: `novaeco-cli`) is our internal Python tool used to manage versioning, releases, and automation across our monorepos and microservices.
 
 ### Installation
 
@@ -27,7 +27,7 @@ pip install --upgrade "git+https://github.com/novaeco-tech/ecosystem-devtools.gi
 
 ## ⚡ Environment Setup (Bootstrap)
 
-New developers can bootstrap the entire Nova Ecosystem environment (cloning all repositories and generating a unified VS Code workspace) using the `novaeco init` command. This replaces manual cloning and configuration.
+New developers can bootstrap the entire NovaEco environment (cloning all repositories and generating a unified VS Code workspace) using the `novaeco init` command. This replaces manual cloning and configuration.
 
 ### Prerequisites
 
@@ -69,9 +69,9 @@ Once your environment is set up, use the CLI to manage service versions.
 Used when fixing bugs. Increments the patch version (e.g., `1.0.0` -\> `1.0.1`) for a specific service.
 
 ```bash
-# Syntax: nova version patch <service_name>
-nova version patch auth
-nova version patch api
+# Syntax: novaeco version patch <service_name>
+novaeco version patch auth
+novaeco version patch api
 ```
 
 **2. Creating a Release**
@@ -79,8 +79,8 @@ Used when shipping new features.
 Increments the Global version and aligns **all** services in the repository to the new version (e.g., `1.1.0`).
 
 ```bash
-# Syntax: nova version release <minor|major>
-nova version release minor
+# Syntax: novaeco version release <minor|major>
+novaeco version release minor
 ```
 
 -----
@@ -107,7 +107,7 @@ These are automatically built and pushed to GHCR (GitHub Container Registry) whe
 
 ### Developing the CLI
 
-If you want to add new commands to the `nova` tool:
+If you want to add new commands to the `novaeco` tool:
 
 1.  Clone this repository.
 2.  Install the package in "editable" mode (changes are reflected immediately):
@@ -115,10 +115,10 @@ If you want to add new commands to the `nova` tool:
     cd novaeco-cli
     pip install -e .
     ```
-3.  Add your new module in `src/nova_cli/commands/`.
-4.  Register the command in `src/nova_cli/main.py`.
+3.  Add your new module in `src/novaeco_cli/commands/`.
+4.  Register the command in `src/novaeco_cli/main.py`.
 
 ### Publishing Updates
 
   * **Docker Images:** Push changes to the `docker/` folder to trigger a rebuild and publish to GHCR.
-  * **Nova CLI:** Simply push changes to the `novaeco-cli/` folder on the `main` branch. Everyone using the "Git Install" method will receive the updates the next time they run the upgrade command or rebuild their DevContainer.
+  * **NovaEco CLI:** Simply push changes to the `novaeco-cli/` folder on the `main` branch. Everyone using the "Git Install" method will receive the updates the next time they run the upgrade command or rebuild their DevContainer.
