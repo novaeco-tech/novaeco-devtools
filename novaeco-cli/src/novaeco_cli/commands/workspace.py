@@ -10,13 +10,16 @@ TARGET_DIR = "repos"
 WORKSPACE_FILENAME = "novaeco.code-workspace"
 
 # Priority defines the order in the VS Code workspace file
+# UPDATED: Matches the new v2026 Folder Structure
 TOPIC_PRIORITY = [
-    "meta",
-    "ecosystem",
-    "enabler",
-    "sector",
-    "worker",
-    "product"
+    "meta",       # .github
+    "core",       # novaeco (The Kernel)
+    "tooling",    # novaeco-devtools
+    "governance", # novaeco-qa, novaeco-releases
+    "enabler",    # novamind, novatrade...
+    "sector",     # novaagro, novawater...
+    "product",    # product-novalab...
+    "worker"      # workers (kept at bottom for cleanliness)
 ]
 
 def register_subcommand(subparsers):
