@@ -6,7 +6,7 @@ This repository hosts shared developer tooling, Docker images, and scripts used 
 
 ## 🛠️ NovaEco CLI
 
-The **NovaEco CLI** (package: `novaeco-cli`) is our internal Python tool used to manage versioning, releases, and automation across our monorepos and microservices.
+The **NovaEco CLI** (package: `novaeco-cli`) is our internal Python tool used to manage versioning, releases, automation, and compliance across our monorepos and microservices.
 
 ### Installation
 
@@ -14,10 +14,11 @@ Since this is an internal tool, we install it directly from the repository sourc
 You do not need to configure a private registry.
 
 **1. Install the latest version:**
+
 ```bash
 # Note: The package is located in the 'novaeco-cli' subdirectory
 pip install "git+https://github.com/novaeco-tech/novaeco-devtools.git@main#subdirectory=novaeco-cli"
-````
+```
 
 **2. Configure your PATH (Important):**
 If you see a warning during installation like:
@@ -72,15 +73,7 @@ novaeco init
 This command will:
 
 1.  Query the `novaeco-tech` GitHub organization.
-2.  Dynamically sort repositories based on the architecture topics:
-      * **Meta** (`.github`)
-      * **Core** (`novaeco`)
-      * **Tooling** (`devtools`)
-      * **Governance** (`novaeco-qa`, `novaeco-releases`)
-      * **Enablers** (e.g., `novatrade`, `novamind`)
-      * **Sectors** (e.g., `novaagro`, `novanature`)
-      * **Workers** (e.g., `worker-bioacoustics`)
-      * **Products** (e.g., `product-novalab`)
+2.  Dynamically sort repositories based on the architecture topics (Meta, Core, Tooling, Governance, Enablers, Sectors, Workers, Products).
 3.  Clone all missing repositories into a `./repos` directory.
 4.  Generate a `novaeco.code-workspace` file configured with the correct folder structure.
 
@@ -93,9 +86,31 @@ code novaeco.code-workspace
 
 -----
 
+## 🔍 Audit & Compliance
+
+[cite_start]To support our **V-Model Testing Strategy**, we provide tools to ensure every repository follows the standard architecture and that all requirements are verified by tests[cite: 397].
+
+**1. Structural Audit**
+Checks if the current repository matches the "Golden Template" for its type (`core`, `enabler`, `sector`, `worker`). It ensures essential files (Dockerfiles, workflows, requirement docs) are present.
+
+```bash
+# Run inside any repo (e.g., novaagro)
+novaeco audit structure
+```
+
+**2. Traceability Matrix**
+Scans your documentation for Requirement IDs (e.g., `REQ-AGRO-FUNC-001`) and your tests for verification tags (`@pytest.mark.requirement(...)`). It outputs a matrix showing coverage gaps.
+
+```bash
+# Run inside any repo to prove test coverage
+novaeco audit traceability
+```
+
+-----
+
 ## 📦 Versioning & Release Management
 
-Once your environment is set up, use the CLI to manage service versions.
+Once your environment is set up and audited, use the CLI to manage service versions.
 
 **1. Patching a Service**
 Used when fixing bugs. Increments the patch version (e.g., `1.0.0` -\> `1.0.1`).

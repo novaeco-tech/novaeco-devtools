@@ -1,9 +1,16 @@
 import os
 import sys
 import glob
-import argparse
+import re
+import click
+from collections import defaultdict
+from rich.console import Console
+from rich.table import Table
 
-# The "Golden Template" for every repo type
+console = Console()
+
+# --- Configuration & Constants ---
+
 STRUCTURE_RULES = {
     "core": [
         "api/src/main.py", "api/requirements.txt", "api/Dockerfile",
@@ -39,90 +46,138 @@ STRUCTURE_RULES = {
     ]
 }
 
-def register_subcommand(subparsers):
-    parser = subparsers.add_parser("audit", help="Audit repository structure and requirements")
-    # No extra arguments needed for now, it audits the current directory
+# Regex to find IDs like REQ-CORE-FUNC-001 in Markdown (Headers or Table Cells)
+REQ_DEF_PATTERN = re.compile(r'(REQ-[A-Z]+-[A-Z]+-\d+)')
 
-def check_structure(repo_type):
-    """Checks if current directory matches the rules."""
-    print(f"🔍 Auditing {repo_type} repository structure...")
-    
-    rules = STRUCTURE_RULES.get(repo_type, STRUCTURE_RULES["sector"]) 
-    missing = []
-    
-    for path in rules:
-        if not os.path.exists(path):
-            missing.append(path)
-            
-    # Check for requirements-internal.txt (Architecture Step 1e)
-    # This is critical for the QA Dependency Graph
-    # Workers usually just have requirements.txt at root
-    if repo_type != "worker" and repo_type != "core":
-        if not os.path.exists("api/requirements-internal.txt"):
-             print("⚠️ Warning: api/requirements-internal.txt missing. QA Graph might fail.")
+# Regex to find Test Decorators in Python
+TEST_VERIFY_PATTERN = re.compile(r'@pytest\.mark\.requirement\(\s*["\'](REQ-[^"\']+)["\']\s*\)')
 
-    if missing:
-        print("❌ Drift Detected! Missing standard paths:")
-        for m in missing:
-            print(f"   - {m}")
-        return False
-        
-    print("✅ Structure complies with NovaEco Standards.")
-    return True
+# --- Helpers ---
 
-def scan_requirements():
-    """Scans for REQ- IDs in markdown files."""
-    print("\n🔍 Scanning for Requirements Definitions...")
-    reqs = []
-    # Scan both functional and non-functional requirements
-    # Also catch other potential requirement files
-    search_path = "website/docs/requirements/*.md"
-    
-    # If it's a worker, docs might be in root or differently placed, 
-    # but based on specs, they should be in website/docs if applicable.
-    # For standalone workers without website folder, we might skip or check README.
-    
-    files = glob.glob(search_path)
-    if not files:
-         # Fallback for simple repos or different structures
-         files = glob.glob("docs/*.md")
-
-    for file in files:
-        print(f"   Reading {file}...")
-        with open(file, 'r') as f:
-            for line in f:
-                # Matches ## REQ-AGRO-FUNC-001 or similar
-                if line.strip().startswith("## REQ-"):
-                    # Extract ID: "## REQ-AGRO-FUNC-001: Title" -> "REQ-AGRO-FUNC-001"
-                    parts = line.strip().split(" ")
-                    if len(parts) > 1:
-                        req_id = parts[1].replace(":", "")
-                        reqs.append(req_id)
-                        print(f"      found: {req_id}")
-    return reqs
-
-def detect_repo_type():
+def detect_repo_type(root_dir):
     """Heuristic to detect repo type based on folder structure."""
-    if os.path.exists("auth") and os.path.exists("api") and os.path.exists("app"):
+    if os.path.exists(os.path.join(root_dir, "auth")) and os.path.exists(os.path.join(root_dir, "api")):
         return "core"
-    elif os.path.exists("api") and os.path.exists("app") and os.path.exists("website"):
-        # Could be enabler, sector, or product. 
-        # We can check package.json or naming convention if needed, 
-        # but their structure rules are identical for now.
-        return "sector" 
-    elif os.path.exists("src") and os.path.exists("Dockerfile") and not os.path.exists("api"):
+    elif os.path.exists(os.path.join(root_dir, "api")) and os.path.exists(os.path.join(root_dir, "website")):
+        return "sector" # Covers Enabler/Sector/Product as they share structure
+    elif os.path.exists(os.path.join(root_dir, "src")) and os.path.exists(os.path.join(root_dir, "Dockerfile")) and not os.path.exists(os.path.join(root_dir, "api")):
         return "worker"
     else:
         return "sector" # Default fallback
 
-def execute(args):
-    rtype = detect_repo_type()
+# --- Commands ---
+
+@click.group()
+def audit():
+    """Audit tools for structure compliance and requirements traceability."""
+    pass
+
+@audit.command()
+@click.option('--path', default='.', help='Root path to scan')
+def structure(path):
+    """Checks if the repository matches the Golden Template."""
+    path = os.path.abspath(path)
+    repo_type = detect_repo_type(path)
     
-    valid_struct = check_structure(rtype)
-    reqs = scan_requirements()
+    console.print(f"[bold blue]🔍 Auditing {repo_type} repository structure at: {path}[/bold blue]")
     
-    if not reqs and rtype != "worker": # Workers might not have rigorous requirements docs yet
-        print("⚠️ No requirements defined in website/docs/requirements/*.md")
+    rules = STRUCTURE_RULES.get(repo_type, STRUCTURE_RULES["sector"]) 
+    missing = []
     
-    if not valid_struct:
+    for rule_path in rules:
+        full_path = os.path.join(path, rule_path)
+        if not os.path.exists(full_path):
+            missing.append(rule_path)
+            
+    # Check for requirements-internal.txt (Architecture Step 1e)
+    if repo_type not in ["worker", "core"]:
+        internal_reqs = os.path.join(path, "api/requirements-internal.txt")
+        if not os.path.exists(internal_reqs):
+             console.print("[yellow]⚠️  Warning: api/requirements-internal.txt missing. QA Graph might fail.[/yellow]")
+
+    if missing:
+        console.print("[bold red]❌ Drift Detected! Missing standard paths:[/bold red]")
+        for m in missing:
+            console.print(f"   - {m}")
+        sys.exit(1)
+        
+    console.print("[bold green]✅ Structure complies with NovaEco Standards.[/bold green]")
+
+@audit.command()
+@click.option('--path', default='.', help='Root path to scan')
+def traceability(path):
+    """
+    Generates the V-Model Traceability Matrix.
+    Compares Definitions (docs/*.md) vs Verifications (tests/*.py).
+    """
+    path = os.path.abspath(path)
+    console.print(f"[bold blue]🔍 Scanning requirements in: {path}[/bold blue]")
+
+    # 1. Find Definitions
+    definitions = {}
+    # Look in website/docs/requirements OR generic docs/
+    search_patterns = [
+        os.path.join(path, "website", "docs", "requirements", "*.md"),
+        os.path.join(path, "docs", "*.md")
+    ]
+    
+    for pattern in search_patterns:
+        for file_path in glob.glob(pattern):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    match = REQ_DEF_PATTERN.search(line)
+                    if match:
+                        req_id = match.group(1)
+                        rel_path = os.path.relpath(file_path, path)
+                        definitions[req_id] = rel_path
+
+    if not definitions:
+        console.print("[yellow]⚠️  No requirement IDs (REQ-*) found in documentation.[/yellow]")
+        return
+
+    # 2. Find Verifications
+    verifications = defaultdict(list)
+    test_pattern = os.path.join(path, "**", "tests", "**", "*.py")
+    
+    for file_path in glob.glob(test_pattern, recursive=True):
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            matches = TEST_VERIFY_PATTERN.findall(content)
+            for req_id in matches:
+                rel_path = os.path.relpath(file_path, path)
+                verifications[req_id].append(rel_path)
+
+    # 3. Build Table
+    table = Table(title="Traceability Matrix")
+    table.add_column("Req ID", style="cyan", no_wrap=True)
+    table.add_column("Status", justify="center")
+    table.add_column("Definition File", style="dim")
+    table.add_column("Verified By (Test)", style="green")
+
+    pass_count = 0
+    fail_count = 0
+
+    for req_id in sorted(definitions.keys()):
+        def_file = definitions[req_id]
+        tests = verifications.get(req_id, [])
+        
+        if tests:
+            status = "[bold green]PASS[/bold green]"
+            # Show up to 2 tests to keep table clean
+            test_str = "\n".join(tests[:2]) 
+            if len(tests) > 2: test_str += "\n..."
+            pass_count += 1
+        else:
+            status = "[bold red]MISSING[/bold red]"
+            test_str = "-"
+            fail_count += 1
+            
+        table.add_row(req_id, status, def_file, test_str)
+
+    console.print(table)
+    
+    # Summary
+    console.print(f"\n[bold]Summary:[/bold] ✅ {pass_count} Covered | ❌ {fail_count} Missing")
+    
+    if fail_count > 0:
         sys.exit(1)
