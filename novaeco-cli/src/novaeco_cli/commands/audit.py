@@ -2,7 +2,7 @@ import os
 import sys
 import glob
 import re
-import click
+# Removed 'click' import as we are converting to argparse
 from collections import defaultdict
 from rich.console import Console
 from rich.table import Table
@@ -46,10 +46,7 @@ STRUCTURE_RULES = {
     ]
 }
 
-# Regex to find IDs like REQ-CORE-FUNC-001 in Markdown (Headers or Table Cells)
 REQ_DEF_PATTERN = re.compile(r'(REQ-[A-Z]+-[A-Z]+-\d+)')
-
-# Regex to find Test Decorators in Python
 TEST_VERIFY_PATTERN = re.compile(r'@pytest\.mark\.requirement\(\s*["\'](REQ-[^"\']+)["\']\s*\)')
 
 # --- Helpers ---
@@ -59,22 +56,39 @@ def detect_repo_type(root_dir):
     if os.path.exists(os.path.join(root_dir, "auth")) and os.path.exists(os.path.join(root_dir, "api")):
         return "core"
     elif os.path.exists(os.path.join(root_dir, "api")) and os.path.exists(os.path.join(root_dir, "website")):
-        return "sector" # Covers Enabler/Sector/Product as they share structure
+        return "sector" 
     elif os.path.exists(os.path.join(root_dir, "src")) and os.path.exists(os.path.join(root_dir, "Dockerfile")) and not os.path.exists(os.path.join(root_dir, "api")):
         return "worker"
     else:
-        return "sector" # Default fallback
+        return "sector"
 
-# --- Commands ---
+# --- Registration & Execution (Argparse) ---
 
-@click.group()
-def audit():
-    """Audit tools for structure compliance and requirements traceability."""
-    pass
+def register_subcommand(subparsers):
+    """Registers the audit command and its subcommands with argparse."""
+    parser = subparsers.add_parser("audit", help="Audit tools for structure compliance and requirements")
+    
+    # Create subcommands like 'novaeco audit structure'
+    audit_subs = parser.add_subparsers(dest="audit_command", required=True)
 
-@audit.command()
-@click.option('--path', default='.', help='Root path to scan')
-def structure(path):
+    # Command: structure
+    p_structure = audit_subs.add_parser("structure", help="Check Golden Template compliance")
+    p_structure.add_argument('--path', default='.', help='Root path to scan')
+
+    # Command: traceability
+    p_trace = audit_subs.add_parser("traceability", help="Generate V-Model Traceability Matrix")
+    p_trace.add_argument('--path', default='.', help='Root path to scan')
+
+def execute(args):
+    """Dispatches execution to the correct function."""
+    if args.audit_command == "structure":
+        run_structure(args.path)
+    elif args.audit_command == "traceability":
+        run_traceability(args.path)
+
+# --- Logic Implementation ---
+
+def run_structure(path):
     """Checks if the repository matches the Golden Template."""
     path = os.path.abspath(path)
     repo_type = detect_repo_type(path)
@@ -89,7 +103,6 @@ def structure(path):
         if not os.path.exists(full_path):
             missing.append(rule_path)
             
-    # Check for requirements-internal.txt (Architecture Step 1e)
     if repo_type not in ["worker", "core"]:
         internal_reqs = os.path.join(path, "api/requirements-internal.txt")
         if not os.path.exists(internal_reqs):
@@ -103,19 +116,13 @@ def structure(path):
         
     console.print("[bold green]✅ Structure complies with NovaEco Standards.[/bold green]")
 
-@audit.command()
-@click.option('--path', default='.', help='Root path to scan')
-def traceability(path):
-    """
-    Generates the V-Model Traceability Matrix.
-    Compares Definitions (docs/*.md) vs Verifications (tests/*.py).
-    """
+def run_traceability(path):
+    """Generates the V-Model Traceability Matrix."""
     path = os.path.abspath(path)
     console.print(f"[bold blue]🔍 Scanning requirements in: {path}[/bold blue]")
 
     # 1. Find Definitions
     definitions = {}
-    # Look in website/docs/requirements OR generic docs/
     search_patterns = [
         os.path.join(path, "website", "docs", "requirements", "*.md"),
         os.path.join(path, "docs", "*.md")
@@ -163,7 +170,6 @@ def traceability(path):
         
         if tests:
             status = "[bold green]PASS[/bold green]"
-            # Show up to 2 tests to keep table clean
             test_str = "\n".join(tests[:2]) 
             if len(tests) > 2: test_str += "\n..."
             pass_count += 1
@@ -176,7 +182,6 @@ def traceability(path):
 
     console.print(table)
     
-    # Summary
     console.print(f"\n[bold]Summary:[/bold] ✅ {pass_count} Covered | ❌ {fail_count} Missing")
     
     if fail_count > 0:
