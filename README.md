@@ -17,7 +17,7 @@ You do not need to configure a private registry.
 
 ```bash
 # Note: The package is located in the 'novaeco-cli' subdirectory
-pip install "git+https://github.com/novaeco-tech/novaeco-devtools.git@main#subdirectory=novaeco-cli"
+pipx install "git+https://github.com/novaeco-tech/novaeco-devtools.git@main#subdirectory=novaeco-cli"
 ```
 
 **2. Configure your PATH (Important):**
@@ -45,7 +45,7 @@ source ~/.bashrc
 If a teammate pushes a fix, run this to update your local machine:
 
 ```bash
-pip install --upgrade "git+https://github.com/novaeco-tech/novaeco-devtools.git@main#subdirectory=novaeco-cli"
+pipx install --upgrade "git+https://github.com/novaeco-tech/novaeco-devtools.git@main#subdirectory=novaeco-cli"
 ```
 
 -----
