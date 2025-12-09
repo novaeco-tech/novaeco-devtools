@@ -29,7 +29,9 @@ RUN pip install --no-cache-dir \
     flake8 \
     pytest \
     mypy \
-    playwright
+    playwright \
+    grpcio \
+    grpcio-tools
 
 # Install Playwright Browsers & OS Dependencies
 # We do this as ROOT before creating the appuser so it's globally available.
