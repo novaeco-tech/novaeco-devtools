@@ -29,11 +29,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --no-cache-dir \
     black==25.12.0 \
     flake8==7.3.0 \
-    pytest==8.0.0 \
-    mypy==1.19.0 \
-    playwright==1.57.0 \
+    build==1.3.0 \
     grpcio==1.76.0 \
     grpcio-tools==1.76.0 \
+    mypy==1.19.0 \
+    pytest==8.0.0 \
+    playwright==1.57.0 \
     ruff==0.4.4
 
 # Install Playwright Browsers & OS Dependencies
