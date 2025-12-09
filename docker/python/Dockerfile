@@ -24,14 +24,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install common Python development tools
+# We pin ALL tools to ensure the "Golden Image" is deterministic.
+# If a tool updates, we want to opt-in manually, not break automatically.
 RUN pip install --no-cache-dir \
-    black \
-    flake8 \
-    pytest \
-    mypy \
-    playwright \
-    grpcio \
-    grpcio-tools
+    black==25.12.0 \
+    flake8==7.3.0 \
+    pytest==8.0.0 \
+    mypy==1.19.0 \
+    playwright==1.57.0 \
+    grpcio==1.76.0 \
+    grpcio-tools==1.76.0 \
+    ruff==0.4.4
 
 # Install Playwright Browsers & OS Dependencies
 # We do this as ROOT before creating the appuser so it's globally available.
