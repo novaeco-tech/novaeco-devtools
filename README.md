@@ -86,9 +86,46 @@ code novaeco.code-workspace
 
 -----
 
+## 📄 AI Context Export
+
+Easily bundle your codebase into a single text file (`context.txt`) to provide clear context for AI coding assistants (ChatGPT, Claude, Gemini). The tool automatically ignores binary files, lock files, and common noise.
+
+**1. Export everything in the current directory:**
+
+```bash
+# Exports to 'context.txt' by default
+novaeco export .
+```
+
+**2. Export a specific repository or subdirectory:**
+
+```bash
+# Useful when targeting a specific service
+novaeco export ./repos/novaeco-devtools/novaeco-cli
+```
+
+**3. Export a specific file:**
+
+```bash
+novaeco export ./repos/novaeco-devtools/README.md
+```
+
+**4. Advanced Filtering:**
+You can exclude specific extensions or paths to reduce noise.
+
+```bash
+# Exclude Python compiled files and the git folder
+novaeco export . --exclude-exts pyc --exclude-dirs .git
+
+# Exclude specific sensitive files
+novaeco export . --exclude-paths "secrets.json" "legacy/"
+```
+
+-----
+
 ## 🔍 Audit & Compliance
 
-[cite_start]To support our **V-Model Testing Strategy**, we provide tools to ensure every repository follows the standard architecture and that all requirements are verified by tests[cite: 397].
+To support our **V-Model Testing Strategy**, we provide tools to ensure every repository follows the standard architecture and that all requirements are verified by tests.
 
 **1. Structural Audit**
 Checks if the current repository matches the "Golden Template" for its type (`core`, `enabler`, `sector`, `worker`). It ensures essential files (Dockerfiles, workflows, requirement docs) are present.
