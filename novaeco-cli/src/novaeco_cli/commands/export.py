@@ -6,7 +6,7 @@ import sys
 
 DEFAULT_EXCLUDE_DIRS = {
     ".git", ".pytest_cache", "node_modules", "dist", "build", 
-    "__pycache__", ".idea", ".vscode", ".venv", "venv", "bin", "obj"
+    "__pycache__", ".idea", ".vscode", ".venv", "venv", "bin", "obj", ".docusaurus"
 }
 
 DEFAULT_EXCLUDE_EXTS = {
