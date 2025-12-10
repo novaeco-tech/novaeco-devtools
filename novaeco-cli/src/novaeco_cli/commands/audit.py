@@ -2,6 +2,9 @@ import os
 import sys
 import glob
 import re
+import json
+import shutil
+import subprocess
 from collections import defaultdict
 from rich.console import Console
 from rich.table import Table
@@ -84,8 +87,49 @@ TEST_VERIFY_PATTERN = re.compile(r'@pytest\.mark\.requirement\(\s*["\'](REQ-[^"\
 
 # --- Helpers ---
 
+def get_repo_type_from_github(root_dir):
+    """Attempts to detect repo type from GitHub topics using gh CLI."""
+    if shutil.which("gh") is None:
+        return None
+        
+    try:
+        # Run gh repo view in the target directory to get the context of that repo
+        # We fetch the 'repositoryTopics' field to see tags like 'core', 'sector'
+        cmd = ["gh", "repo", "view", "--json", "repositoryTopics"]
+        
+        # Suppress output to avoid cluttering the audit log
+        result = subprocess.run(
+            cmd, 
+            capture_output=True, 
+            text=True, 
+            check=True,
+            cwd=root_dir  # Execute in the target repo's directory
+        )
+        data = json.loads(result.stdout)
+        
+        # data structure: {'repositoryTopics': [{'name': 'core'}, {'name': 'python'}]}
+        topics = [t['name'] for t in data.get('repositoryTopics', [])]
+        
+        # Match against our known keys in STRUCTURE_RULES
+        for topic in topics:
+            if topic in STRUCTURE_RULES:
+                return topic
+                
+    except (subprocess.CalledProcessError, FileNotFoundError, json.JSONDecodeError):
+        # Fail silently and fall back to file heuristics if no network/gh tool
+        return None
+    return None
+
 def detect_repo_type(root_dir):
-    """Heuristic to detect repo type based on folder structure."""
+    """Detects repo type using GitHub topics, falling back to file heuristics."""
+    
+    # 1. Try GitHub Topics (Source of Truth)
+    gh_type = get_repo_type_from_github(root_dir)
+    if gh_type:
+        # console.print(f"[dim]ℹ️  Detected type '{gh_type}' from GitHub topics[/dim]")
+        return gh_type
+
+    # 2. Fallback to Heuristics (File-based)
     if os.path.exists(os.path.join(root_dir, "auth")) and os.path.exists(os.path.join(root_dir, "api")):
         return "core"
     elif os.path.exists(os.path.join(root_dir, "api")) and os.path.exists(os.path.join(root_dir, "website")):
