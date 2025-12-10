@@ -30,10 +30,27 @@ DEFAULT_EXCLUDE_PATHS = {
 }
 
 def register_subcommand(subparsers):
+    # Define the examples to show in the help output
+    examples = """Examples:
+  # Export everything in current directory (default)
+  novaeco export
+  
+  # Export a specific repository
+  novaeco export repos/novaagro
+  
+  # Export with exclusions (e.g. ignore Python cache and lock files)
+  novaeco export . --exclude-exts pyc lock --exclude-dirs __pycache__
+  
+  # Export a specific file
+  novaeco export repos/novaeco/README.md
+"""
+
     parser = subparsers.add_parser(
         "export", 
         help="Export text content of files for AI context",
-        description="Recursively reads files and merges them into a single text output."
+        description="Recursively reads files and merges them into a single text output.",
+        formatter_class=argparse.RawDescriptionHelpFormatter, # Required for newlines
+        epilog=examples
     )
     
     parser.add_argument(
