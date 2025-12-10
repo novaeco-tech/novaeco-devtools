@@ -150,27 +150,85 @@ def register_subcommand(subparsers):
 
     # Command: structure
     p_structure = audit_subs.add_parser("structure", help="Check Golden Template compliance")
-    p_structure.add_argument('--path', default='.', help='Root path to scan')
+    p_structure.add_argument('targets', nargs='*', default=[], help='Specific repos to check (e.g. "novaagro"). If empty, checks current dir or all repos if in root.')
 
     # Command: traceability
     p_trace = audit_subs.add_parser("traceability", help="Generate V-Model Traceability Matrix")
-    p_trace.add_argument('--path', default='.', help='Root path to scan')
+    p_trace.add_argument('targets', nargs='*', default=[], help='Specific repos to check (e.g. "novaagro"). If empty, checks current dir or all repos if in root.')
 
 def execute(args):
     """Dispatches execution to the correct function."""
     if args.audit_command == "structure":
-        run_structure(args.path)
+        dispatch_structure_audit(args.targets)
     elif args.audit_command == "traceability":
-        run_traceability(args.path)
+        dispatch_traceability_audit(args.targets)
 
-# --- Logic Implementation ---
+# --- Dispatch Logic (Handles Global vs Local) ---
 
-def run_structure(path):
-    """Checks if the repository matches the Golden Template."""
+def dispatch_audit_generic(targets, audit_func):
+    """Generic dispatcher for running an audit function against one or many repos."""
+    cwd = os.getcwd()
+    repos_dir = os.path.join(cwd, "repos")
+    
+    # CASE 1: User specified targets: "novaeco audit structure novaagro"
+    if targets:
+        success = True
+        for t in targets:
+            candidate = os.path.join(repos_dir, t)
+            if not os.path.exists(candidate):
+                candidate = os.path.abspath(t)
+            
+            if not audit_func(candidate):
+                success = False
+        if not success:
+            sys.exit(1)
+        return
+
+    # CASE 2: Running from Workspace Root (Auto-discover all)
+    if os.path.exists(repos_dir) and os.path.isdir(repos_dir):
+        console.print(f"[bold blue]🚀 Detected Workspace Root. Auditing all repositories in ./repos ...[/bold blue]")
+        
+        results = {"pass": 0, "fail": 0}
+        repo_list = sorted([d for d in os.listdir(repos_dir) if os.path.isdir(os.path.join(repos_dir, d))])
+        
+        for repo in repo_list:
+            full_path = os.path.join(repos_dir, repo)
+            if repo.startswith("."): continue
+            
+            if audit_func(full_path):
+                results["pass"] += 1
+            else:
+                results["fail"] += 1
+                
+        console.print(f"\n[bold]🏁 Summary: {results['pass']} Passed | {results['fail']} Failed[/bold]")
+        if results["fail"] > 0:
+            sys.exit(1)
+        return
+
+    # CASE 3: Running from inside a repo (Single mode)
+    if not audit_func("."):
+        sys.exit(1)
+
+def dispatch_structure_audit(targets):
+    dispatch_audit_generic(targets, audit_single_structure)
+
+def dispatch_traceability_audit(targets):
+    dispatch_audit_generic(targets, audit_single_traceability)
+
+# --- Core Logic Implementation ---
+
+def audit_single_structure(path):
+    """Audits structure for a single repository. Returns True if passed."""
     path = os.path.abspath(path)
+    repo_name = os.path.basename(path)
+    
+    if not os.path.isdir(path):
+        console.print(f"[red]❌ Error: {path} is not a directory.[/red]")
+        return False
+
     repo_type = detect_repo_type(path)
     
-    console.print(f"[bold blue]🔍 Auditing {repo_type} repository structure at: {path}[/bold blue]")
+    console.print(f"[bold]🔍 Auditing {repo_name} ({repo_type})...[/bold]")
     
     rules = STRUCTURE_RULES.get(repo_type, STRUCTURE_RULES["sector"]) 
     missing = []
@@ -183,20 +241,27 @@ def run_structure(path):
     if repo_type not in ["worker", "core"]:
         internal_reqs = os.path.join(path, "api/requirements-internal.txt")
         if not os.path.exists(internal_reqs):
-             console.print("[yellow]⚠️  Warning: api/requirements-internal.txt missing. QA Graph might fail.[/yellow]")
+             console.print(f"   [yellow]⚠️  Warning: api/requirements-internal.txt missing.[/yellow]")
 
     if missing:
-        console.print("[bold red]❌ Drift Detected! Missing standard paths:[/bold red]")
+        console.print(f"   [bold red]❌ FAILED. Missing:[/bold red]")
         for m in missing:
-            console.print(f"   - {m}")
-        sys.exit(1)
-        
-    console.print("[bold green]✅ Structure complies with NovaEco Standards.[/bold green]")
+            console.print(f"      - {m}")
+        return False
+    
+    console.print(f"   [bold green]✅ OK[/bold green]")
+    return True
 
-def run_traceability(path):
-    """Generates the V-Model Traceability Matrix."""
+def audit_single_traceability(path):
+    """Audits traceability for a single repository. Returns True if passed."""
     path = os.path.abspath(path)
-    console.print(f"[bold blue]🔍 Scanning requirements in: {path}[/bold blue]")
+    repo_name = os.path.basename(path)
+    
+    if not os.path.isdir(path):
+        console.print(f"[red]❌ Error: {path} is not a directory.[/red]")
+        return False
+
+    console.print(f"\n[bold blue]🔍 Scanning requirements in: {repo_name}[/bold blue]")
 
     # 1. Find Definitions
     definitions = {}
@@ -216,8 +281,9 @@ def run_traceability(path):
                         definitions[req_id] = rel_path
 
     if not definitions:
-        console.print("[yellow]⚠️  No requirement IDs (REQ-*) found in documentation.[/yellow]")
-        return
+        console.print(f"   [yellow]⚠️  No requirement IDs (REQ-*) found.[/yellow]")
+        # We return True because it's not a failure, just empty (e.g. for devtools)
+        return True
 
     # 2. Find Verifications
     verifications = defaultdict(list)
@@ -232,7 +298,7 @@ def run_traceability(path):
                 verifications[req_id].append(rel_path)
 
     # 3. Build Table
-    table = Table(title="Traceability Matrix")
+    table = Table(title=f"Traceability: {repo_name}")
     table.add_column("Req ID", style="cyan", no_wrap=True)
     table.add_column("Status", justify="center")
     table.add_column("Definition File", style="dim")
@@ -258,8 +324,6 @@ def run_traceability(path):
         table.add_row(req_id, status, def_file, test_str)
 
     console.print(table)
+    console.print(f"   [bold]Summary:[/bold] ✅ {pass_count} Covered | ❌ {fail_count} Missing")
     
-    console.print(f"\n[bold]Summary:[/bold] ✅ {pass_count} Covered | ❌ {fail_count} Missing")
-    
-    if fail_count > 0:
-        sys.exit(1)
+    return fail_count == 0

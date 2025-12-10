@@ -3,3 +3,11 @@
 
 # Local data
 .DS_Store
+
+# build directories
+novaeco-cli/build/
+novaeco-cli/src/novaeco_cli.egg-info/top_level.txt
+novaeco-cli/src/novaeco_cli.egg-info/SOURCES.txt
+novaeco-cli/src/novaeco_cli.egg-info/entry_points.txt
+novaeco-cli/src/novaeco_cli.egg-info/PKG-INFO
+novaeco-cli/src/novaeco_cli.egg-info/dependency_links.txt
