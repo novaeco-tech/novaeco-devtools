@@ -14,11 +14,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install common global Node.js tools
-# NOTE: We removed 'yarn' from this list because it is already 
-# pre-installed in the base 'node' image.
+# Pin versions to prevent "works on my machine" drift.
+# We explicitly list the versions we want to lock into the platform.
 RUN npm install -g \
-    nodemon \
-    typescript
+    nodemon@3.1.11 \
+    typescript@5.9.3
 
 # The base 'node' image already includes a non-root 'node' user
 USER node

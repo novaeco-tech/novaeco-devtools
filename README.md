@@ -127,19 +127,32 @@ novaeco export . --exclude-paths "secrets.json" "legacy/"
 
 To support our **V-Model Testing Strategy**, we provide tools to ensure every repository follows the standard architecture and that all requirements are verified by tests.
 
+The audit commands are **context-aware**. They adapt their behavior based on where you run them or what arguments you provide.
+
 **1. Structural Audit**
-Checks if the current repository matches the "Golden Template" for its type (`core`, `enabler`, `sector`, `worker`). It ensures essential files (Dockerfiles, workflows, requirement docs) are present.
+Checks if the repository matches the "Golden Template" for its type (`core`, `enabler`, `sector`, `worker`). It ensures essential files (Dockerfiles, workflows, requirement docs) are present.
 
 ```bash
-# Run inside any repo (e.g., novaagro)
+# Mode A: Audit the current directory (Local Check)
+cd repos/novaagro
+novaeco audit structure
+
+# Mode B: Audit specific repositories (Targeted Check)
+novaeco audit structure novaagro novafin
+
+# Mode C: Audit the entire workspace (Global Governance)
+# Run this from the root of your workspace (where the 'repos/' folder is)
 novaeco audit structure
 ```
 
 **2. Traceability Matrix**
-Scans your documentation for Requirement IDs (e.g., `REQ-AGRO-FUNC-001`) and your tests for verification tags (`@pytest.mark.requirement(...)`). It outputs a matrix showing coverage gaps.
+Scans documentation for Requirement IDs (e.g., `REQ-AGRO-FUNC-001`) and tests for verification tags (`@pytest.mark.requirement(...)`). It generates a coverage matrix to prove compliance.
 
 ```bash
-# Run inside any repo to prove test coverage
+# Check coverage for a single component
+novaeco audit traceability novatrade
+
+# Generate a compliance report for the entire ecosystem (Global)
 novaeco audit traceability
 ```
 
@@ -178,6 +191,7 @@ novaeco version release minor
 
 We maintain standard development images to ensure consistency across all engineers' machines.
 These are automatically built and pushed to GHCR (GitHub Container Registry) whenever the `docker/` directory changes.
+Tool versions are strictly pinned. 
 
 | Image | Tag | Description |
 | :--- | :--- | :--- |
