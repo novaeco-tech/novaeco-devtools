@@ -2,7 +2,6 @@ import os
 import sys
 import glob
 import re
-# Removed 'click' import as we are converting to argparse
 from collections import defaultdict
 from rich.console import Console
 from rich.table import Table
@@ -13,11 +12,45 @@ console = Console()
 
 STRUCTURE_RULES = {
     "core": [
-        "api/src/main.py", "api/requirements.txt", "api/Dockerfile",
-        "app/app.py", "app/requirements.txt",
-        "auth/src/main.py", "auth/api/proto/v1/auth.proto",
-        "website/docs/requirements/functional.md", "website/docusaurus.config.js",
-        ".github/workflows/ci.yml", ".github/CODEOWNERS"
+        "api/src/api_service.py",
+        "api/tests/unit",
+        "api/requirements.txt", "api/requirements-dev.txt", "api/requirements-internal.txt",
+        "api/pyproject.toml",
+        "api/VERSION",
+
+        "app/src/app_service.py",
+        "app/tests/unit",
+        "app/requirements.txt", "app/requirements-dev.txt", "app/requirements-internal.txt",
+        "app/pyproject.toml",
+        "app/VERSION",
+
+        "auth/src/auth_service.py",
+        "auth/api/proto/v1/auth.proto",
+        "auth/tests/unit",
+        "auth/requirements.txt", "auth/requirements-dev.txt", "auth/requirements-internal.txt",
+        "auth/pyproject.toml",
+        "auth/VERSION",
+
+        "website/docs/requirements/functional.md", 
+        "website/docs/requirements/non-functional.md", 
+        "website/docs/requirements/sustainability.md", 
+        "website/docusaurus.config.js",
+        "website/package.json",
+        "website/src/components/__tests__",
+
+        "tests/e2e/specs",
+        "tests/performance",
+        "tests/integration",
+
+        ".github/workflows/ci.yml", 
+        ".github/workflows/lint.yml",
+        ".github/workflows/sast.yml",
+        ".github/workflows/publish-api.yml",
+        ".github/workflows/publish-app.yml",
+        ".github/workflows/publish-auth.yml",
+        ".github/workflows/publish-website.yml",
+
+        ".github/CODEOWNERS"
     ],
     "enabler": [
         "api/src/main.py", "api/requirements.txt",
