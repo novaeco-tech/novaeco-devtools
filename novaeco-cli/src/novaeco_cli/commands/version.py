@@ -10,6 +10,7 @@ SERVICE_TYPES = {
     "app": {"path": "app/VERSION", "type": "text"},
     "website": {"path": "website/package.json", "type": "json"},
     "worker": {"path": "VERSION", "type": "text"},
+    "ui": {"path": "VERSION", "type": "text"},
 }
     
 GLOBAL_FILE = "GLOBAL_VERSION"
