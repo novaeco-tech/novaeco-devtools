@@ -11,10 +11,10 @@ from pathlib import Path
 def register_subcommand(subparsers):
     """Registers the 'build' command and its sub-commands (client, service)."""
     
-    # Define examples to show in the help output (novaeco build --help)
+    # Define examples to show in     the help output (novaeco build --help)
     examples = """Examples:
   # --- Client SDK Building ---
-  # Compile ProtoBufs from 'component/api/proto/v1' into a Python Wheel
+  # Compile ProtoBufs from 'api/proto/v1' into a Python Wheel
   novaeco build client
 
   # Build client from a custom proto location with a specific service name
@@ -40,7 +40,7 @@ def register_subcommand(subparsers):
     # --- 1. Client Builder ---
     # Compiles ProtoBufs into a Python Client SDK package (.whl)
     p_client = build_subs.add_parser("client", help="Compile ProtoBufs into a Python Client SDK")
-    p_client.add_argument("--proto-dir", default="component/api/proto/v1", help="Directory containing .proto files")
+    p_client.add_argument("--proto-dir", default="api/proto/v1", help="Directory containing .proto files")
     p_client.add_argument("--out-dir", default="dist/client", help="Staging directory for the build")
     p_client.add_argument("--service-name", help="Override service name (defaults to repo folder name)")
 
@@ -60,7 +60,7 @@ def clean_dir(path):
 def get_version():
     """Tries to find a version source of truth from standard locations."""
     # Priority: GLOBAL_VERSION (Repo root) -> Component Version -> API Version
-    candidates = ["GLOBAL_VERSION", "component/api/VERSION", "api/VERSION", "VERSION"]
+    candidates = ["GLOBAL_VERSION", "api/VERSION", "api/VERSION", "VERSION"]
     for c in candidates:
         if os.path.exists(c):
             with open(c, 'r') as f:
