@@ -1,6 +1,6 @@
 import argparse
 import sys
-from novaeco_cli.commands import version, workspace, audit, export, build 
+from novaeco_cli.commands import version, workspace, audit, export, build, test
 
 def main():
     parser = argparse.ArgumentParser(
@@ -16,6 +16,7 @@ def main():
     audit.register_subcommand(subparsers)
     export.register_subcommand(subparsers)
     build.register_subcommand(subparsers)
+    test.register_subcommand(subparsers)
 
     args = parser.parse_args()
 
@@ -30,6 +31,8 @@ def main():
         export.execute(args)
     elif args.main_command == "build":
         build.execute(args)
+    elif args.main_command == "test":
+        test.execute(args)
     else:
         parser.print_help()
         sys.exit(1)
