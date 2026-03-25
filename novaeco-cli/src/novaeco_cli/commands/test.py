@@ -1,126 +1,181 @@
-import os
-import sys
-import subprocess
 import argparse
-import shutil
+import os
+import subprocess
+import sys
+
+from rich.console import Console
+
+console = Console()
+
 
 def register_subcommand(subparsers):
-    """Registers the 'test' command and its sub-commands."""
-    
     examples = """Examples:
-  # Run unit tests in the current repo (auto-detects Python/Node)
+  # Run all test layers (L5 -> L4 -> L3)
+  novaeco test all
+
+  # Run L5 Unit Tests (C++ Core & Python Domain/Service/Client)
   novaeco test unit
 
-  # Run integration tests with a keyword filter
-  novaeco test integration --filter "database"
-
-  # Run global acceptance tests (QA repo)
-  novaeco test acceptance
+  # Run L4 Contract Tests
+  novaeco test contract
+  
+  # Run L3 End-to-End Tests
+  novaeco test e2e
 """
-
     parser = subparsers.add_parser(
-        "test", 
-        help="Execute tests (Unit, Integration, E2E, Acceptance)",
+        "test",
+        help="Execute V-Model Test Suites (L5 to L3)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=examples
+        epilog=examples,
     )
-    
-    test_subs = parser.add_subparsers(dest="test_scope", required=True)
-    
-    # Standard Scopes
-    # These align with the Master Testing Matrix
-    scopes = ["unit", "integration", "e2e", "system", "acceptance", "smoke"]
-    
-    for scope in scopes:
-        p = test_subs.add_parser(scope, help=f"Run {scope.capitalize()} tests")
-        p.add_argument("-f", "--filter", help="Filter tests by keyword (passed to -k in pytest)")
-        p.add_argument("--watch", action="store_true", help="Run in watch mode (if supported)")
 
-def detect_runtime():
-    """Heuristic to decide if this is a Python or Node.js repository."""
-    if os.path.exists("package.json"):
-        return "node"
-    if os.path.exists("pyproject.toml") or os.path.exists("requirements.txt") or os.path.exists("setup.py"):
-        return "python"
-    return "unknown"
+    subs = parser.add_subparsers(dest="test_command", required=True)
 
-def run_python_test(scope, args):
-    """Runs Pytest for the specific scope."""
-    target_dir = f"tests/{scope}"
-    
-    # Handle the slightly different pathing for QA repo structure vs Component repo
-    # If standard path doesn't exist, try looking closer (e.g., just 'tests/')
-    if not os.path.exists(target_dir):
-        # Fallback for simple repos where tests might just be in 'tests/'
-        # But generally we enforce the folder structure.
-        print(f"⚠️  Directory '{target_dir}' not found.")
-        # We check if maybe the user is in root and meant 'novaeco-qa/tests/system'
-        # But usually CLI is run from repo root.
-        if not os.path.exists("tests"):
-             print("❌ No 'tests/' directory found in current root.")
-             sys.exit(1)
-    
-    print(f"🐍 Detected Python Runtime. Running Pytest on {target_dir}...")
-    
-    cmd = ["pytest", target_dir]
-    
-    # Add common robust flags
-    cmd.append("-v") # Verbose
-    
-    if args.filter:
-        cmd.extend(["-k", args.filter])
-        
-    if args.watch:
-        # Requires pytest-watch or pytest-xdist used in a specific way
-        # For now, we'll just warn it's not fully standard in vanilla pytest
-        print("⚠️  Watch mode in Python requires 'pytest-watch' (ptw). Running standard test...")
+    subs.add_parser("all", help="Run all component tests (Unit -> Contract -> E2E)")
+    subs.add_parser("unit", help="Run L5 Unit Tests (C++ Core & Python Logic)")
+    subs.add_parser("integration", help="Run L4 Integration Tests")
+    subs.add_parser("contract", help="Run L4 API Contract Tests")
+    subs.add_parser("e2e", help="Run L3 End-to-End Tests")
+    subs.add_parser("performance", help="Run L5 Micro-Benchmarks")
+    subs.add_parser("accessibility", help="Run L3 A11y Scans")
+
+
+def get_test_env():
+    """
+    Injects local source directories into PYTHONPATH.
+    This allows pytest to run against the latest local code WITHOUT
+    requiring the developer to run `pip install -e .` after every edit.
+    """
+    env = os.environ.copy()
+    paths = []
+    for p in ["domain/src", "service/src", "client/src", "api/src"]:
+        if os.path.exists(p):
+            paths.append(os.path.abspath(p))
+
+    if paths:
+        existing = env.get("PYTHONPATH", "")
+        # Append local paths first
+        env["PYTHONPATH"] = ":".join(paths) + (":" + existing if existing else "")
+    return env
+
+
+def run_pytest(target_dirs, name, allow_fail=False):
+    """Helper to run pytest safely against a list of directories."""
+    valid_dirs = [d for d in target_dirs if os.path.exists(d)]
+
+    if not valid_dirs:
+        console.print(f"⚠️  No directories found for {name}. Skipping.")
+        return True
+
+    console.print(f"\n[bold blue]🧪 Running {name}...[/bold blue]")
+
+    # We use --import-mode=importlib to prevent module name collisions
+    # (e.g., if domain/tests/test_models.py and client/tests/test_models.py both exist)
+    cmd = [sys.executable, "-m", "pytest", "--import-mode=importlib"] + valid_dirs
+
+    result = subprocess.run(cmd, env=get_test_env())
+
+    if result.returncode != 0:
+        if allow_fail:
+            console.print(f"[bold yellow]⚠️ {name} Failed (Non-blocking).[/bold yellow]")
+        else:
+            console.print(f"[bold red]❌ {name} Failed.[/bold red]")
+        return False
+
+    console.print(f"[bold green]✅ {name} Passed.[/bold green]")
+    return True
+
+
+def run_ctest():
+    """Helper to run C++ Core unit tests via CTest."""
+    if not os.path.exists("core"):
+        return True  # Not a hybrid repo, skip gracefully
+
+    console.print("\n[bold blue]🧪 Running L5 Unit Tests (C++ Core)...[/bold blue]")
+
+    # Try using the Conan release preset (standard in CI)
+    cmd = ["ctest", "--preset", "conan-release", "--output-on-failure"]
 
     try:
-        subprocess.run(cmd, check=True)
-    except subprocess.CalledProcessError:
-        print(f"❌ {scope.capitalize()} tests failed.")
-        sys.exit(1)
+        result = subprocess.run(cmd, cwd="core")
+        if result.returncode != 0:
+            console.print("[bold red]❌ C++ Core Tests Failed.[/bold red]")
+            return False
+    except FileNotFoundError:
+        console.print("[bold red]❌ 'ctest' not found. Is the C++ toolchain installed?[/bold red]")
+        return False
 
-def run_node_test(scope, args):
-    """Runs NPM scripts for the specific scope."""
-    print(f"📦 Detected Node.js Runtime.")
-    
-    # Map 'scope' to standard npm script names defined in package.json
-    # Convention: "test:unit", "test:e2e", "test:int"
-    script_map = {
-        "unit": "test:unit",
-        "integration": "test:integration",
-        "e2e": "test:e2e",
-        "accessibility": "test:a11y"
-    }
-    
-    script_name = script_map.get(scope, f"test:{scope}")
-    
-    # Check if script exists in package.json (simple grep check or json load)
-    # We'll just try running it and catch error for simplicity in this script
-    cmd = ["npm", "run", script_name, "--"]
-    
-    if args.filter:
-        # Pass filter to Jest/Playwright
-        # Jest uses -t, Playwright uses -g. This is tricky to standardize 100%.
-        # We assume the underlying script accepts arguments passed after '--'
-        cmd.append(args.filter)
+    console.print("[bold green]✅ C++ Core Tests Passed.[/bold green]")
+    return True
 
-    print(f"   Executing: {' '.join(cmd)}")
-    
-    try:
-        subprocess.run(cmd, check=True)
-    except subprocess.CalledProcessError:
-        print(f"❌ 'npm run {script_name}' failed.")
-        sys.exit(1)
+
+# --- Layer Runners ---
+
+
+def test_unit():
+    # Run C++ Core tests first
+    c_success = run_ctest()
+    if not c_success:
+        return False
+
+    # Then run Python Logic tests
+    return run_pytest(["domain/tests", "service/tests", "client/tests"], "L5 Unit Tests (Python)")
+
+
+def test_integration():
+    return run_pytest(["tests/integration"], "L4 Integration Tests")
+
+
+def test_contract():
+    return run_pytest(["tests/integration/contracts"], "L4 Contract Tests")
+
+
+def test_e2e():
+    return run_pytest(["tests/e2e"], "L3 Component E2E Tests")
+
+
+def test_performance():
+    return run_pytest(["tests/performance"], "L5 Performance Benchmarks")
+
+
+def test_accessibility():
+    # Accessibility is often allowed to fail in early dev, so we pass allow_fail=True
+    # or you can enforce it strictly by removing that parameter.
+    return run_pytest(["tests/accessibility"], "L3 Accessibility Scans")
+
 
 def execute(args):
-    runtime = detect_runtime()
-    
-    if runtime == "python":
-        run_python_test(args.test_scope, args)
-    elif runtime == "node":
-        run_node_test(args.test_scope, args)
-    else:
-        print("❌ Could not detect project type (no pyproject.toml or package.json found).")
+    cmd = args.test_command
+    success = True
+
+    if cmd == "all":
+        # Run the full V-Model stack in order
+        success = test_unit()
+        if success:
+            success = test_contract()
+        if success:
+            success = test_integration()
+        if success:
+            success = test_e2e()
+
+        if success:
+            console.print("\n[bold green]🎉 All Component Test Layers Passed![/bold green]")
+        else:
+            console.print("\n[bold red]🛑 Test Suite Failed. Fix errors before proceeding.[/bold red]")
+            sys.exit(1)
+
+    elif cmd == "unit":
+        success = test_unit()
+    elif cmd == "integration":
+        success = test_integration()
+    elif cmd == "contract":
+        success = test_contract()
+    elif cmd == "e2e":
+        success = test_e2e()
+    elif cmd == "performance":
+        success = test_performance()
+    elif cmd == "accessibility":
+        success = test_accessibility()
+
+    if not success:
         sys.exit(1)

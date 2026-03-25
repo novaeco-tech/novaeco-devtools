@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools==82.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "novaeco-devtools"
+version = "0.1.0"
+description = "NovaEco Unified Development Toolchain (Docker + CLI)"
+requires-python = "==3.11.14"
+authors = [
+    { name = "NovaEco Team", email = "dev@novaeco.tech" }
+]
+# No runtime dependencies at the root level; it governs Docker and the CLI sub-folder
+dependencies = []
+
+[tool.setuptools]
+# Explicitly tell setuptools this is a meta-package with no source code at the root.
+packages = []

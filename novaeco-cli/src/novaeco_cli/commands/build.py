@@ -1,235 +1,299 @@
-import os
-import sys
-import shutil
-import subprocess
 import argparse
 import glob
+import os
 import re
+import shutil
+import subprocess
+import sys
 import tarfile
 from pathlib import Path
 
+from rich.console import Console
+
+console = Console()
+
+
 def register_subcommand(subparsers):
-    """Registers the 'build' command and its sub-commands (client, service)."""
-    
-    # Define examples to show in     the help output (novaeco build --help)
     examples = """Examples:
-  # --- Client SDK Building ---
-  # Compile ProtoBufs from 'api/proto/v1' into a Python Wheel
-  novaeco build client
+  # Build everything in the correct dependency order
+  novaeco build all
 
-  # Build client from a custom proto location with a specific service name
-  novaeco build client --proto-dir api/protos --out-dir dist/sdk --service-name custom-auth
+  # Build only the C++ core
+  novaeco build core
+  
+  # Build only the Protobuf API contracts
+  novaeco build api
 
-  # --- Service Packaging ---
-  # Package the current service source code for Docker deployment
-  novaeco build service
+  # Build documentation (all perspectives)
+  novaeco build docs
 
-  # Package a service with a non-standard source directory
-  novaeco build service --src-dir app/src --out-dir build_artifacts --reqs requirements-prod.txt
+  # Build specific documentation perspective
+  novaeco build docs internal
 """
-
     parser = subparsers.add_parser(
-        "build", 
-        help="Build artifacts (SDKs, Docker images, Service packages)",
-        formatter_class=argparse.RawDescriptionHelpFormatter, # Required to preserve newlines in examples
-        epilog=examples
+        "build",
+        help="Build fractal component artifacts (Core, API, Domain, Service, Client, Docs)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=examples,
     )
-    
+
     build_subs = parser.add_subparsers(dest="build_command", required=True)
-    
-    # --- 1. Client Builder ---
-    # Compiles ProtoBufs into a Python Client SDK package (.whl)
-    p_client = build_subs.add_parser("client", help="Compile ProtoBufs into a Python Client SDK")
-    p_client.add_argument("--proto-dir", default="api/proto/v1", help="Directory containing .proto files")
-    p_client.add_argument("--out-dir", default="dist/client", help="Staging directory for the build")
-    p_client.add_argument("--service-name", help="Override service name (defaults to repo folder name)")
 
-    # --- 2. Service Builder ---
-    # Packages the service source code and requirements for Docker deployment (.tar.gz)
-    p_service = build_subs.add_parser("service", help="Package Service for Deployment")
-    p_service.add_argument("--src-dir", default="src", help="Source code root directory")
-    p_service.add_argument("--out-dir", default="dist", help="Output directory for the tarball")
-    p_service.add_argument("--reqs", default="requirements.txt", help="Primary requirements file")
+    # Register fractal layers
+    build_subs.add_parser("all", help="Build all layers in dependency order")
+    build_subs.add_parser("api", help="Compile Protobufs and build API wheel")
+    build_subs.add_parser("core", help="Compile C++ engine and build Extension wheel")
+    build_subs.add_parser("domain", help="Build Domain logic wheel")
+    build_subs.add_parser("service", help="Build Service wiring wheel")
+    build_subs.add_parser("client", help="Build Client SDK wheel")
 
-def clean_dir(path):
-    """Ensures a directory exists and is empty."""
-    if os.path.exists(path):
-        shutil.rmtree(path)
-    os.makedirs(path)
+    # Web/Node
+    p_web = build_subs.add_parser("web", help="Package Web/Node Projects")
+    p_web.add_argument("--build-dir", default="build", help="Directory where npm output is generated")
 
-def get_version():
-    """Tries to find a version source of truth from standard locations."""
-    # Priority: GLOBAL_VERSION (Repo root) -> Component Version -> API Version
-    candidates = ["GLOBAL_VERSION", "api/VERSION", "api/VERSION", "VERSION"]
-    for c in candidates:
-        if os.path.exists(c):
-            with open(c, 'r') as f:
-                return f.read().strip()
-    return "0.0.1-dev" # Fallback if no version file is found
+    # Documentation
+    p_docs = build_subs.add_parser("docs", help="Build Sphinx documentation perspectives")
+    p_docs.add_argument(
+        "perspective",
+        nargs="?",
+        choices=["all", "public", "partner", "internal"],
+        default="all",
+        help="Which perspective to build (default: all)",
+    )
 
-def fix_imports(package_dir):
-    """
-    Replicates the 'sed' logic to fix relative imports in generated gRPC files.
-    Changes 'import foo_pb2' to 'from . import foo_pb2' so it works as a package.
-    """
-    print(f"🔧 Fixing relative imports in {package_dir}...")
-    for filepath in glob.glob(os.path.join(package_dir, "*_pb2_grpc.py")):
-        with open(filepath, 'r') as f:
+
+# --- Utilities ---
+
+
+def get_service_name():
+    """Determines the current repository name dynamically without hardcoded lists."""
+
+    # 1. Try Python's pyproject.toml (PEP-621 standard)
+    if os.path.exists("pyproject.toml"):
+        with open("pyproject.toml", "r", encoding="utf-8") as f:
+            for line in f:
+                match = re.search(r'^name\s*=\s*"([^"]+)"', line.strip())
+                if match:
+                    return match.group(1)
+
+    # 2. Try Node's package.json (For web/frontend services)
+    if os.path.exists("package.json"):
+        import json
+
+        try:
+            with open("package.json", "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if "name" in data:
+                    return data["name"]
+        except Exception:
+            pass
+
+    # 3. Try Git remote origin (Handles C++ only repos and /workspace mounts)
+    try:
+        res = subprocess.run(
+            ["git", "config", "--get", "remote.origin.url"], capture_output=True, text=True, check=True
+        )
+        url = res.stdout.strip()
+        if url:
+            # Extracts 'novaeco-gateway' from 'git@github.com:novaeco-tech/novaeco-gateway.git'
+            return url.split("/")[-1].replace(".git", "")
+    except Exception:
+        pass
+
+    # 4. Final Fallback (Local directory name)
+    name = os.path.basename(os.getcwd())
+    if name == "workspace":
+        console.print(
+            "[bold red]❌ Error:[/bold red] Running in a DevContainer (/workspace) but "
+            "cannot determine the project name. Missing pyproject.toml, package.json, or Git config."
+        )
+        sys.exit(1)
+
+    return name
+
+
+def run_cmd(cmd, cwd=None, env=None):
+    """Runs a shell command with error handling."""
+    try:
+        subprocess.run(cmd, cwd=cwd, env=env, check=True)
+    except subprocess.CalledProcessError:
+        console.print(f"[bold red]❌ Command Failed:[/bold red] {' '.join(cmd)}")
+        sys.exit(1)
+
+
+# --- Layer Builders ---
+
+
+def build_api():
+    """Compiles Protobufs and builds the API wheel."""
+    service_name = get_service_name()
+    package_name = f"{service_name.replace('-', '_')}_api"
+    api_dir = "api"
+    proto_dir = os.path.join(api_dir, "proto", "v1")
+    target_src_dir = os.path.join(api_dir, "src", package_name, "v1")
+
+    if not os.path.exists(proto_dir):
+        console.print(f"⚠️  No protos found in {proto_dir}. Skipping API build.")
+        return
+
+    console.print(f"\n[bold blue]⚙️  Building API Layer ({service_name})...[/bold blue]")
+
+    # 1. Create target directories
+    os.makedirs(target_src_dir, exist_ok=True)
+    Path(os.path.join(api_dir, "src", package_name, "__init__.py")).touch()
+    Path(os.path.join(target_src_dir, "__init__.py")).touch()
+
+    # 2. Compile Protos
+    protos = glob.glob(os.path.join(proto_dir, "*.proto"))
+    console.print("   [dim]Compiling Protobufs...[/dim]")
+    run_cmd(
+        [
+            sys.executable,
+            "-m",
+            "grpc_tools.protoc",
+            f"-I{os.path.join(api_dir, 'proto', 'v1')}",
+            f"--python_out={target_src_dir}",
+            f"--grpc_python_out={target_src_dir}",
+        ]
+        + protos
+    )
+
+    # 3. Patch relative imports in generated gRPC code
+    console.print("   [dim]Patching relative imports...[/dim]")
+    for filepath in glob.glob(os.path.join(target_src_dir, "*_pb2_grpc.py")):
+        with open(filepath, "r") as f:
             content = f.read()
-        
-        # Regex to find standard proto imports and make them relative
-        # Matches: import some_file_pb2 as ... or just import some_file_pb2
-        content = re.sub(r'import (\w+_pb2)', r'from . import \1', content)
-        
-        with open(filepath, 'w') as f:
+        content = re.sub(r"import (\w+_pb2)", r"from . import \1", content)
+        with open(filepath, "w") as f:
             f.write(content)
 
-def execute_client_build(args):
-    cwd = os.getcwd()
-    # Resolve paths relative to current working directory
-    proto_dir = os.path.join(cwd, args.proto_dir)
-    out_dir = os.path.join(cwd, args.out_dir)
-    
-    # Auto-detect service name from folder (e.g., 'novaagro')
-    service_name = args.service_name or os.path.basename(cwd)
-    # Python packages usually use underscores (novaagro_client)
-    package_name = f"{service_name.replace('-', '_')}_client" 
-    package_dir = os.path.join(out_dir, package_name)
-    version = get_version()
+    # 4. Build Wheel
+    console.print("   [dim]Packaging API Wheel...[/dim]")
+    run_cmd([sys.executable, "-m", "build", api_dir, "--outdir", "dist"])
+    console.print("✅ API Layer built successfully.")
 
-    print(f"📦 Building Client SDK: {package_name} v{version}")
-    print(f"   Proto Source: {proto_dir}")
 
-    # 1. Clean & Init Staging Area
-    clean_dir(out_dir)
-    os.makedirs(package_dir)
-    
-    # 2. Compile ProtoBuf -> Python
-    # We use the grpc_tools module via subprocess to generate code
-    protos = glob.glob(os.path.join(proto_dir, "*.proto"))
-    if not protos:
-        print(f"❌ No .proto files found in {proto_dir}")
+def build_core():
+    """Builds the C++ Conan library and the Python Extension Wheel."""
+    if not os.path.exists("core"):
+        console.print("⚠️  No 'core' directory found. Skipping C++ build.")
+        return
+
+    console.print("\n[bold blue]🔧 Building C++ Core Layer...[/bold blue]")
+
+    # 1. Conan Setup & Build
+    console.print("   [dim]Running Conan install...[/dim]")
+    run_cmd(["conan", "profile", "detect", "--force"], cwd="core")
+    run_cmd(
+        ["conan", "install", ".", "--build=missing", "-s", "compiler.cppstd=20", "-s", "build_type=Release"], cwd="core"
+    )
+
+    # 2. Package Python Wheel (Scikit-Build-Core)
+    console.print("   [dim]Packaging Core Python Wheel...[/dim]")
+    # We pass BUILD_TESTS=OFF so the production wheel doesn't require GTest
+    env = os.environ.copy()
+    toolchain = os.path.abspath("core/build/Release/generators/conan_toolchain.cmake")
+    run_cmd(
+        [
+            sys.executable,
+            "-m",
+            "build",
+            "core",
+            "--outdir",
+            "dist",
+            "-Ccmake.define.BUILD_TESTS=OFF",
+            f"-Ccmake.define.CMAKE_TOOLCHAIN_FILE={toolchain}",
+        ],
+        env=env,
+    )
+
+    console.print("✅ Core Layer built successfully.")
+
+
+def build_python_layer(layer_name):
+    """Builds standard Python wheels for Domain, Service, or Client."""
+    if not os.path.exists(layer_name):
+        console.print(f"⚠️  Directory '{layer_name}' not found. Skipping.")
+        return
+
+    console.print(f"\n[bold blue]📦 Building {layer_name.capitalize()} Layer...[/bold blue]")
+    run_cmd([sys.executable, "-m", "build", layer_name, "--outdir", "dist"])
+    console.print(f"✅ {layer_name.capitalize()} Layer built successfully.")
+
+
+def build_web(args):
+    """Builds Node.js / React frontends."""
+    if not shutil.which("npm"):
+        console.print("[bold red]❌ Error:[/bold red] 'npm' not found. Run this in a Node container.")
         sys.exit(1)
 
-    print(f"   Compiling {len(protos)} proto files...")
-    # protoc command construction
-    cmd = [
-        sys.executable, "-m", "grpc_tools.protoc",
-        f"-I{proto_dir}",
-        f"--python_out={package_dir}",
-        f"--grpc_python_out={package_dir}",
-    ] + protos
-    
-    try:
-        subprocess.run(cmd, check=True)
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Protoc compilation failed: {e}")
-        sys.exit(1)
+    console.print("\n[bold blue]🌍 Building Web Project...[/bold blue]")
+    run_cmd(["npm", "ci"])
+    run_cmd(["npm", "run", "build"])
 
-    # 3. Fix Relative Imports (The Python gRPC gotcha)
-    fix_imports(package_dir)
-
-    # 4. Create __init__.py to make it a valid Python package
-    Path(os.path.join(package_dir, "__init__.py")).touch()
-
-    # 5. Generate setup.py dynamically
-    # This allows the artifact to be pip installed
-    setup_content = f"""
-from setuptools import setup, find_packages
-
-setup(
-    name="{service_name}-client",
-    version="{version}",
-    packages=find_packages(),
-    install_requires=[
-        "grpcio>=1.60.0",
-        "protobuf>=4.25.1"
-    ],
-    description="Auto-generated gRPC client for {service_name}",
-)
-"""
-    with open(os.path.join(out_dir, "setup.py"), 'w') as f:
-        f.write(setup_content)
-
-    # 6. Build the Wheel artifact
-    print("   Building Wheel artifact...")
-    try:
-        subprocess.run(
-            [sys.executable, "-m", "build", "--wheel"], 
-            cwd=out_dir, 
-            check=True,
-            stdout=subprocess.DEVNULL # Silence the verbose build output
-        )
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Wheel build failed: {e}")
-        sys.exit(1)
-
-    # List the result
-    dist_output = os.path.join(out_dir, "dist")
-    if os.path.exists(dist_output):
-        artifacts = os.listdir(dist_output)
-        print(f"✅ Success! Artifacts generated in {dist_output}:")
-        for a in artifacts:
-            print(f"   - {a}")
-    else:
-        print("⚠️  Warning: Build command succeeded but dist folder is missing.")
-
-def execute_service_build(args):
-    cwd = os.getcwd()
-    dist_dir = os.path.join(cwd, args.out_dir)
-    src_dir = os.path.join(cwd, args.src_dir)
-    service_name = os.path.basename(cwd) # e.g., 'auth' or 'novaagro'
-    
-    # Clean & Init
-    # Only clean if it's not the same as source (sanity check)
-    if os.path.exists(dist_dir) and os.path.abspath(dist_dir) != os.path.abspath(cwd):
-         shutil.rmtree(dist_dir)
-    
+    dist_dir = "dist"
     os.makedirs(dist_dir, exist_ok=True)
-
-    print(f"📦 Packaging Service Artifact: {service_name}...")
-
-    # Define the output tarball name
-    # Convention: novaeco-[service].tar.gz
-    tar_name = f"novaeco-{service_name}.tar.gz"
+    tar_name = f"{get_service_name()}.tar.gz"
     tar_path = os.path.join(dist_dir, tar_name)
 
-    print(f"   Source: {src_dir}")
-    print(f"   Target: {tar_path}")
-
-    # Create the Tarball directly
-    # This effectively creates the 'build context' for Docker
+    console.print(f"   [dim]Packaging {args.build_dir} to {tar_name}...[/dim]")
     with tarfile.open(tar_path, "w:gz") as tar:
-        # 1. Add Source Code (The App)
-        if os.path.exists(src_dir):
-            print(f"   + Adding {args.src_dir}/")
-            tar.add(src_dir, arcname="src")
-        else:
-            print(f"❌ Error: Source directory '{src_dir}' not found.")
-            sys.exit(1)
+        tar.add(args.build_dir, arcname=".")
 
-        # 2. Add Requirements (Critical for Docker install)
-        # We look for the primary reqs file + the internal one
-        req_files = [args.reqs, "requirements-internal.txt"]
-        
-        for req in req_files:
-            if os.path.exists(req):
-                print(f"   + Adding {req}")
-                tar.add(req, arcname=req)
+    console.print("✅ Web Layer packaged successfully.")
 
-        # 3. Add Configs (Optional but common)
-        if os.path.exists("pyproject.toml"):
-            print("   + Adding pyproject.toml")
-            tar.add("pyproject.toml", arcname="pyproject.toml")
-            
-    print(f"✅ Service Artifact Created: {tar_path}")
+
+def build_docs(perspective):
+    """Builds Sphinx documentation for specified perspectives."""
+    if not os.path.exists("docs/source"):
+        console.print("⚠️  No 'docs/source' directory found. Skipping.")
+        return
+
+    perspectives = ["public", "partner", "internal"] if perspective == "all" else [perspective]
+
+    for p in perspectives:
+        console.print(f"\n[bold blue]📚 Building Docs ({p.capitalize()} Perspective)...[/bold blue]")
+
+        # Ensure target directory exists
+        os.makedirs(f"docs/build/{p}", exist_ok=True)
+
+        cmd = [
+            "sphinx-build",
+            "-W",
+            "--keep-going",  # Treat warnings as errors, but finish the build to show all errors
+            "-b",
+            "html",  # Build HTML
+            "-t",
+            p,  # Inject the perspective tag (e.g., -t public)
+            "docs/source",
+            f"docs/build/{p}",
+        ]
+        run_cmd(cmd)
+
+    console.print("✅ Documentation built successfully in docs/build/")
+
 
 def execute(args):
-    """Dispatch based on the build sub-command."""
-    if args.build_command == "client":
-        execute_client_build(args)
-    elif args.build_command == "service":
-        execute_service_build(args)
-    else:
-        print(f"Unknown build command: {args.build_command}")
-        sys.exit(1)
+    # Ensure dist folder exists and is clean-ish
+    os.makedirs("dist", exist_ok=True)
+
+    cmd = args.build_command
+
+    if cmd == "all":
+        # Strict order mandated by Fractal Architecture dependencies
+        build_api()
+        build_core()
+        build_python_layer("client")
+        build_python_layer("domain")
+        build_python_layer("service")
+        console.print("\n[bold green]🎉 All Fractal Layers built successfully! Check the ./dist folder.[/bold green]")
+    elif cmd == "api":
+        build_api()
+    elif cmd == "core":
+        build_core()
+    elif cmd in ["domain", "service", "client"]:
+        build_python_layer(cmd)
+    elif cmd == "web":
+        build_web(args)
+    elif cmd == "docs":
+        build_docs(args.perspective)

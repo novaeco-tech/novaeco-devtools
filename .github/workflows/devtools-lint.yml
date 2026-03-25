@@ -1,0 +1,31 @@
+name: NovaEco DevTools Static Analysis
+
+on:
+  pull_request:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install Local CLI and Dev Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install "./novaeco-cli[dev]"
+          
+      - name: Run Ruff (Lint & Format Check)
+        run: |
+          ruff check novaeco-cli
+          ruff format --check novaeco-cli
+          
+      - name: Run MyPy (Type Check)
+        run: mypy novaeco-cli/src

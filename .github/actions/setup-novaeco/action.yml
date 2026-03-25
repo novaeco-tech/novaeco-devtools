@@ -1,0 +1,72 @@
+name: 'NovaEco Workspace Setup'
+description: 'Bootstraps authentication, devtools, and dependencies'
+
+inputs:
+  app-id:
+    description: 'GitHub App ID for Automation'
+    required: true
+  private-key:
+    description: 'GitHub App Private Key'
+    required: true
+  install-python:
+    description: 'Set to true if running on a bare host (ubuntu-latest). False if in container.'
+    required: false
+    default: 'false'
+
+# Define outputs so the calling workflow can access the token
+outputs:
+  token:
+    description: "The generated GitHub App Token"
+    value: ${{ steps.generate_token.outputs.token }}
+
+runs:
+  using: "composite"
+  steps:
+    # 1. (Optional) Install Python if on Host
+    # Required for test-integration and test-e2e runners
+    - name: Set up Python
+      if: inputs.install-python == 'true'
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    # 2. Generate Token
+    - name: Generate Automation Token
+      id: generate_token
+      uses: actions/create-github-app-token@v1
+      with:
+        app-id: ${{ inputs.app-id }}
+        private-key: ${{ inputs.private-key }}
+        owner: novaeco-tech
+
+    # 3a. Capture the Composite Action Version
+    - name: Capture Action Version
+      id: get_ref
+      shell: bash
+      # Inside a 'run' step, this correctly evaluates to the setup-novaeco tag (e.g., v0.2.0)
+      run: echo "ref=${{ github.action_ref }}" >> $GITHUB_OUTPUT
+
+    # 3b. Checkout DevTools (Dynamically matching the captured version)
+    - name: Checkout DevTools
+      uses: actions/checkout@v4
+      with:
+        repository: novaeco-tech/novaeco-devtools
+        token: ${{ steps.generate_token.outputs.token }}
+        path: .devtools
+        # Pass the captured variable here instead of calling the context directly
+        ref: ${{ steps.get_ref.outputs.ref }}
+
+    # 4. Install Toolchain
+    # Installs CLI and Dev requirements so they are available to the runner
+    - name: Install Dependencies
+      shell: bash
+      run: |
+        pip install .devtools/novaeco-cli
+        # Installs the caller repo's (e.g. Gateway) local dev dependencies
+        pip install ".[dev]"
+  
+    # 5. Fix Git Workspace Ownership
+    # Resolves 'dubious ownership' errors when running as root inside the container
+    - name: Fix Git Workspace Ownership
+      shell: bash
+      run: git config --global --add safe.directory $GITHUB_WORKSPACE

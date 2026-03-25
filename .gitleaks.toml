@@ -1,0 +1,32 @@
+# ==============================================================================
+# NovaEco DevTools Gitleaks Allowlist
+# ==============================================================================
+# This file tells the secret scanner to ignore intentionally mocked secrets
+# used for unit testing, CLI generation, and local development examples.
+# ==============================================================================
+
+# CRITICAL: Tell Gitleaks to keep all of its built-in security rules 
+# (AWS, Slack, GitHub tokens) rather than overwriting them.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Ignore all secrets found in CLI testing directories and documentation examples"
+
+# 1. Ignore specific paths (Regex)
+paths = [
+    '''novaeco-cli/tests/.*''',
+    '''docs/.*''',
+    '''\.devcontainer/devcontainer\.json'''
+]
+
+# 2. Ignore specific dummy values (Regex)
+# If you need to use dummy tokens in normal code (e.g., default args), 
+# standardize on a prefix like "mock_" or "dummy_" and ignore it here.
+regexes = [
+    '''dummy_[a-zA-Z0-9_]+''',
+    '''mock_secret_.*''',
+    # Common placeholders used in CLI documentation/examples
+    '''ghp_YOUR_TOKEN_HERE''',
+    '''ghp_[a-zA-Z0-9_]+_example'''
+]

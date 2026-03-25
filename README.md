@@ -1,133 +1,73 @@
-# 🌍 NovaEco DevTools
+# 🛠️ NovaEco DevTools (Tools)
 
-**NovaEco** is the open‑source **Digital Public Infrastructure** for the circular economy.
+![Component ID](https://img.shields.io/badge/ID-TOOLS-orange)
+![Layer](https://img.shields.io/badge/Layer-DevX-blue)
+![Type](https://img.shields.io/badge/Type-CLI-green)
 
-This repository hosts shared developer tooling, Docker images, and scripts used to build the NovaEco **System-of-Systems**.
+**The Force Multiplier.**
 
-## 🛠️ NovaEco CLI
+**NovaEco DevTools** (`novaeco-devtools`) is the engineering backbone of the platform.
+It hosts the **NovaEco CLI** (`novaeco`), the internal Swiss Army Knife that automates the complex "System-of-Systems" workflow—from bootstrapping a new laptop to deploying a multi-service release.
+It also defines the **Standard Development Environments** (DevContainers) used by engineers to write code.
 
-The **NovaEco CLI** (package: `novaeco-cli`) is our internal Python tool used to manage versioning, releases, automation, builds, and compliance across our monorepos and microservices.
-
-### Installation
-
-Since this is an internal tool, we install it directly from the repository source.
-You do not need to configure a private registry.
-
-**1. Install the latest version:**
-
-```bash
-# Note: The package is located in the 'novaeco-cli' subdirectory
-# We force install to ensure dependencies like 'grpcio-tools' are picked up
-pipx install --force "git+https://github.com/novaeco-tech/novaeco-devtools.git@main#subdirectory=novaeco-cli"
-```
-
-**2. Configure your PATH (Important):**
-If you see a warning during installation like:
-
-> *WARNING: The script novaeco is installed in '/home/user/.local/bin' which is not on PATH.*
-
-You must add that directory to your shell configuration so your terminal can find the `novaeco` command.
-
-**For Zsh users (default on macOS & newer Linux):**
-
-```bash
-echo 'export PATH=$PATH:$HOME/.local/bin' >> ~/.zshrc
-source ~/.zshrc
-```
-
-**For Bash users:**
-
-```bash
-echo 'export PATH=$PATH:$HOME/.local/bin' >> ~/.bashrc
-source ~/.bashrc
-```
-
-**3. Update to the latest version:**
-If a teammate pushes a fix, run this to update your local machine:
-
-```bash
-pipx install --upgrade "git+https://github.com/novaeco-tech/novaeco-devtools.git@main#subdirectory=novaeco-cli"
-```
+> **Theoretical Context:** In a polyrepo architecture, "Context Switching" is the enemy.
+This tooling implements **Unified Developer Experience** (ADR_KERNEL_0001)—abstracting away the complexity of 20+ Git repositories so engineers can treat the entire ecosystem as a single logical unit.
+It also enforces **V-Model Compliance** by programmatically verifying that every Requirement has a matching Test.
 
 ---
 
-## 🏗️ Build & Package
+## ⚡ Quick Start (Bootstrap)
 
-We standardized the build process for both Client SDKs (ProtoBuf -> Python) and Service Artifacts (Source -> Docker Context) using the CLI. This replaces manual Makefiles and shell scripts.
-
-### 1. Building Client SDKs
-
-Compiles `.proto` files into a distributable Python package (Wheel). Other services use this SDK to talk to your service via gRPC.
-
-```bash
-# Build the client for the current service (auto-detects proto location)
-# Run this from the repository root (e.g., inside 'novaagro/')
-novaeco build client
-
-# Custom usage (specify directories explicitly)
-novaeco build client --proto-dir api/proto/v1 --out-dir dist/sdk
-```
-
-### 2. Building Service Artifacts
-
-Packages the service source code and requirements into a `.tar.gz` file suitable for Docker builds.
-
-```bash
-# Package the current service for deployment
-novaeco build service
-
-# Custom usage
-novaeco build service --src-dir app/src --out-dir build_artifacts
-```
-
----
-
-## ⚡ Environment Setup (Bootstrap)
-
-New developers can bootstrap the entire NovaEco environment (cloning all repositories and generating a unified VS Code workspace) using the `novaeco init` command. This replaces manual cloning and configuration.
+New to the team? One command sets up your entire workstation.
 
 ### Prerequisites
+* **Python 3.11+**
+* **Git** & **GitHub CLI** (`gh auth login`)
 
-1. **Python 3.11+**
-2. **Git**
-3. **GitHub CLI (`gh`)** — [Installation Guide](https://cli.github.com/)
-* *Note: You must run `gh auth login` to authenticate before initializing the environment.*
+### Installation
+We use `pipx` to install the CLI globally in an isolated environment.
 
+```bash
+# Install (or Upgrade) the NovaEco CLI
+pipx install --force "git+ssh://git@github.com/novaeco-tech/novaeco-devtools.git@v0.1.0#subdirectory=novaeco-cli"
 
-### Usage
+```
 
-**1. Initialize the Environment:**
-Navigate to the folder where you want your project root to be, then run:
+### Initialize Workspace
+
+Navigate to your work folder (e.g., `~/work/novaeco`) and run:
 
 ```bash
 novaeco init
+
 ```
 
-This command will:
+**What this does:**
 
-1. Query the `novaeco-tech` GitHub organization.
-2. Dynamically sort repositories based on the architecture topics (Meta, Core, Tooling, Governance, Enablers, Sectors, Workers, Products).
-3. Clone all missing repositories into a `./repos` directory.
-4. Generate a `novaeco.code-workspace` file configured with the correct folder structure.
+1. **Discovery:** Queries the `novaeco-tech` GitHub org.
+2. **Cloning:** Downloads all 20+ microservices into a `./repos/` directory.
+3. **Workspace:** Generates a unified `novaeco.code-workspace` file for VS Code.
 
-**2. Open the Workspace:**
-Open the generated workspace file in VS Code to see the full "System-of-Systems" view:
+**Finally, open the workspace:**
 
 ```bash
 code novaeco.code-workspace
+
 ```
 
 ---
 
 ## 📄 AI Context Export
 
-Easily bundle your codebase into a single text file (`context.txt`) to provide clear context for AI coding assistants (ChatGPT, Claude, Gemini). The tool automatically ignores binary files, lock files, and common noise.
+Easily bundle your codebase into a single text file (`context.txt`) to provide clear context for AI coding assistants (ChatGPT, Claude, Gemini).
+The tool automatically ignores binary files, lock files, and common noise.
 
 **1. Export everything in the current directory:**
 
 ```bash
 # Exports to 'context.txt' by default
 novaeco export .
+
 ```
 
 **2. Export a specific repository or subdirectory:**
@@ -135,16 +75,11 @@ novaeco export .
 ```bash
 # Useful when targeting a specific service
 novaeco export ./repos/novaeco-devtools/novaeco-cli
+
 ```
 
-**3. Export a specific file:**
-
-```bash
-novaeco export ./repos/novaeco-devtools/README.md
-```
-
-**4. Advanced Filtering:**
-You can exclude specific extensions or paths to reduce noise.
+**3. Advanced Filtering:**
+You can exclude specific extensions or paths to reduce token usage.
 
 ```bash
 # Exclude Python compiled files and the git folder
@@ -152,94 +87,90 @@ novaeco export . --exclude-exts pyc --exclude-dirs .git
 
 # Exclude specific sensitive files
 novaeco export . --exclude-paths "secrets.json" "legacy/"
+
 ```
 
 ---
 
-## 🔍 Audit & Compliance
+## 🔍 Audit & Compliance (V-Model)
 
-To support our **V-Model Testing Strategy**, we provide tools to ensure every repository follows the standard architecture and that all requirements are verified by tests.
+To support our quality standards, the CLI acts as a "Quality Gatekeeper" to ensure every repository follows the standard NovaEco architecture.
 
-The audit commands are **context-aware**. They adapt their behavior based on where you run them or what arguments you provide.
-
-**1. Structural Audit**
-Checks if the repository matches the "Golden Template" for its type (`core`, `enabler`, `sector`, `worker`). It ensures essential files (Dockerfiles, workflows, requirement docs) are present.
+**1. Structural Audit:**
+Checks if the current repository matches the folder template for its type (e.g., Service vs. Library).
 
 ```bash
-# Mode A: Audit the current directory (Local Check)
-cd repos/novaagro
+# Run inside any repo
 novaeco audit structure
 
-# Mode B: Audit specific repositories (Targeted Check)
-novaeco audit structure novaagro novafin
-
-# Mode C: Audit the entire workspace (Global Governance)
-# Run this from the root of your workspace (where the 'repos/' folder is)
-novaeco audit structure
 ```
 
-**2. Traceability Matrix**
-Scans documentation for Requirement IDs (e.g., `REQ-AGRO-FUNC-001`) and tests for verification tags (`@pytest.mark.requirement(...)`). It generates a coverage matrix to prove compliance.
+**2. Traceability Matrix:**
+Implements `REQ_DEVTOOLS_FUNCTIONAL_0001`. Scans documentation and tests to ensure requirements are verified.
 
 ```bash
-# Check coverage for a single component
-novaeco audit traceability novatrade
-
-# Generate a compliance report for the entire ecosystem (Global)
+# Scans for @trace annotations and maps them to Requirements
 novaeco audit traceability
+
 ```
 
 ---
 
 ## 📦 Versioning & Release Management
 
-Once your environment is set up and audited, use the CLI to manage service versions.
+Use the CLI to manage service versions across the ecosystem.
 
-**1. Patching a Service**
-Used when fixing bugs. Increments the patch version (e.g., `1.0.0` -> `1.0.1`).
+**1. Patching a Service:**
+Used when fixing bugs. Increments the patch version (e.g., `1.0.0` -> `1.0.1`) and updates `pyproject.toml`.
 
 ```bash
 # Syntax: novaeco version patch <service_name>
-
-# For Monorepos (Enablers/Sectors):
 novaeco version patch api
-novaeco version patch auth
 
-# For Workers (Root-level versioning):
-novaeco version patch worker
 ```
 
-**2. Creating a Release**
+**2. Creating a Release:**
 Used when shipping new features.
-Increments the Global version and aligns **all** services in the repository to the new version (e.g., `1.1.0`).
+Increments the local logic package version (SemVer) and generates changelogs.
 
 ```bash
 # Syntax: novaeco version release <minor|major>
 novaeco version release minor
+
 ```
 
 ---
 
-## 🐳 Shared Docker Images
+## 🐳 Standard Development Environments
 
-We maintain standard development images to ensure consistency across all engineers' machines.
-These are automatically built and pushed to GHCR (GitHub Container Registry) whenever the `docker/` directory changes.
-Tool versions are strictly pinned.
+We maintain a **Unified Development Image** to ensure consistency across all engineers' machines, supporting our Hybrid C++/Python/Node architecture.
 
 | Image | Tag | Description |
 | --- | --- | --- |
-| `ghcr.io/novaeco/dev-python` | `latest` | <br>**Python 3.11**, Flask, Pytest, `protobuf-compiler` (for gRPC), and `grpcio-tools`.
+| `ghcr.io/novaeco-tech/novaeco-dev-unified` | `latest` | **Unified Toolchain:** Python 3.11, Node.js 20, C++17 (GCC/CMake), Poetry, Git. |
+| `ghcr.io/novaeco-tech/novaeco-dev-python` | `latest` | **Python 3.11**, Poetry, Git, Make, GCC. |
+| `ghcr.io/novaeco-tech/novaeco-dev-node` | `latest` | **Node.js 20**, NPM, Cypress. |
 
- |
-| `ghcr.io/novaeco/dev-node` | `latest` | <br>**Node.js 20**, npm, and Docusaurus support.
+> **⚠️ Important Distinction:**
+> * **`novaeco-devtools` (Here):** Optimized for **Developer Experience** (includes debuggers, linters, shells).
+> * **`novaeco-runtime` (Separate Repo):** Optimized for **Production Execution** (hardened, stripped, minimal footprint).
+> 
+> 
 
- |
+---
 
-**Usage in `devcontainer.json`:**
+## 🔗 Traceability Matrix (V-Model)
 
-```json
-"image": "ghcr.io/novaeco/dev-python:latest"
-```
+This component implements specific requirements defined in the **NovaEco Kernel** and local component logic.
+
+| Requirement ID | Type | Description | Source |
+| --- | --- | --- | --- |
+| **`NEED_OPERATIONS_0002`** | Need | **Standardized Tooling:** Consistent dev environment. | [Systemic Needs](../novaeco/docs/source/usecases/systemic_needs.rst) |
+| **`REQ_DEVTOOLS_FUNCTIONAL_0001`** | Functional | **Compliance Scan:** Automated V-Model verification. | [Functional Reqs](docs/source/requirements/internal_functional.rst) |
+| **`REQ_DEVTOOLS_INTERFACE_0001`** | Interface | **Unified Interface:** CLI must wrap Docker/Pytest. | [Interface Reqs](docs/source/requirements/interface.rst) |
+| **`CONSTRAINT_ARCH_0002`** | Constraint | **Kernel Governance:** CLI enforces V-Model verification. | [Constraints](../novaeco/docs/source/architecture/constraints.rst) |
+| **`USECASE_COMPLIANCE_0002`** | Use Case | **Action Reconstruction:** Cryptographic BoM audits. | [Compliance Domain](../novaeco/docs/source/usecases/compliance.rst) |
+| **`NEED_COMPLIANCE_0001`** | Need | **Regulatory Auditability:** Verifiable action reconstruction. | [Systemic Needs](../novaeco/docs/source/usecases/systemic_needs.rst) |
 
 ---
 
@@ -247,23 +178,23 @@ Tool versions are strictly pinned.
 
 ### Developing the CLI
 
-If you want to add new commands to the `novaeco` tool:
+If you want to add new commands (e.g., `novaeco deploy`):
 
-1. Clone this repository.
-2. Install the package in "editable" mode (changes are reflected immediately):
+1. **Clone:** `git clone .../novaeco-devtools.git`
+2. **Install Editable:**
+
 ```bash
 cd novaeco-cli
 pip install -e .
+
 ```
 
-3. Add your new module in `src/novaeco_cli/commands/`.
+3. **Code:** Add your module in `src/novaeco_cli/commands/`.
+4. **Test:** Your changes are reflected immediately when you run `novaeco`.
 
-4. Register the command in `src/novaeco_cli/main.py`.
+### Updating DevContainers
 
+The `docker/` folder contains the source for our Development Images.
 
-
-### Publishing Updates
-
-* **Docker Images:** Push changes to the `docker/` folder to trigger a rebuild and publish to GHCR.
-
-* **NovaEco CLI:** Simply push changes to the `novaeco-cli/` folder on the `main` branch. Everyone using the "Git Install" method will receive the updates the next time they run the upgrade command or rebuild their DevContainer.
+* **Push to Main:** Triggers a GitHub Action to rebuild and push `ghcr.io/novaeco-tech/novaeco-dev-unified`.
+* **Usage:** These are consumed by `.devcontainer/devcontainer.json` files across the ecosystem.

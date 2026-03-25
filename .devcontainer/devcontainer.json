@@ -1,17 +1,35 @@
 {
     "name": "DevTools Maintainer Environment",
-    // We use a generic Ubuntu image to bootstrap this repo
     "image": "mcr.microsoft.com/devcontainers/base:bullseye",
     "features": {
-        // Enable Docker-in-Docker so we can build images inside this container
-        "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+        "ghcr.io/devcontainers/features/python:1": {
+            "version": "3.11",
+            "installTools": true
+        }
     },
     "customizations": {
         "vscode": {
             "extensions": [
                 "ms-azuretools.vscode-docker",
-                "redhat.vscode-yaml"
+                "redhat.vscode-yaml",
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "donjayamanne.git-extension-pack",
+                "yzhang.markdown-all-in-one",
+                "lextudio.restructuredtext",
+                "MermaidChart.vscode-mermaid-chart",
+                "tamasfe.even-better-toml",
+                "charliermarsh.ruff"
             ]
         }
-    }
+    },
+    // This tells VS Code to pull GITHUB_TOKEN from your host machine 
+    // and inject it into the container.
+    "remoteEnv": {
+        "PATH": "${containerEnv:PATH}:/home/vscode/.local/bin",
+        "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}"
+    },
+    // Install the CLI locally in editable mode with Dev tools
+    "postCreateCommand": "pip install -e ./novaeco-cli[dev]"
 }

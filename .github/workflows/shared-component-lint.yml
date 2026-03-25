@@ -1,0 +1,71 @@
+name: NovaEco Shared Component Static Analysis (LINT)
+
+on:
+  workflow_call:
+    secrets:
+      AUTOMATION_APP_ID:
+        required: true
+      AUTOMATION_APP_PRIVATE_KEY:
+        required: true
+
+# Add permissions to pull private container images
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  # Job 1: Smart Path Filtering
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3  # Upgraded to v3 to avoid Node 16 deprecation warnings
+        id: filter
+        with:
+          filters: |
+            code:
+              - '**/*.py'
+              - 'pyproject.toml'
+              - '**/pyproject.toml'
+              - 'docs/**'
+
+  # Job 2: Unified Static Analysis
+  static-analysis:
+    needs: changes
+    # Run if ANY code or docs changed
+    if: ${{ needs.changes.outputs.code == 'true' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    container:
+      # Pinned unified development environment
+      image: ghcr.io/novaeco-tech/novaeco-dev-unified:v0.1.0
+      options: --user root
+      credentials:
+        username: github-actions[bot]
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # 1. Setup the NovaEco CLI Toolchain
+      # Points to the centralized composite action
+      - name: Setup NovaEco Env
+        id: setup
+        uses: novaeco-tech/novaeco-devtools/.github/actions/setup-novaeco@v0.1.0
+        with:
+          app-id: ${{ secrets.AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
+
+      # 2. Conditionally Generate API Contracts (Only if protos exist)
+      - name: Generate API Contracts (For MyPy)
+        if: hashFiles('api/proto/**') != ''
+        env:
+          GITHUB_TOKEN: ${{ steps.setup.outputs.token }}
+        run: |
+          novaeco deps sync
+          novaeco build api
+
+      # 3. Execute the Unified Check
+      # This single command runs Ruff (Lint & Format), MyPy, Bandit, Doc8, and rstcheck!
+      - name: Run All Static Analysis Checks
+        run: novaeco check all

@@ -1,0 +1,48 @@
+name: "NovaEco DevTools Security Scan"
+
+on:
+  push:
+    branches: [ "main" ]
+    paths-ignore:
+      - '**/*.md'
+  pull_request:
+    branches: [ "main" ]
+    paths-ignore:
+      - '**/*.md'
+  schedule:
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+
+jobs:
+  secret_scan:
+    name: Scan for Hardcoded Secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 
+          
+      - name: Run Gitleaks
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/workspace \
+            zricethezav/gitleaks:latest detect --source="/workspace" --verbose --redact
+
+  sast_scan:
+    name: Static Application Security Testing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install Local CLI and Dev Dependencies
+        run: pip install "./novaeco-cli[dev]"
+        
+      - name: Run Bandit (Python)
+        run: bandit -r novaeco-cli/src -ll
+        
+      - name: Run Semgrep (Multi-Language)
+        run: semgrep scan --config=p/python --error novaeco-cli

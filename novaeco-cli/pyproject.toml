@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools==82.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "novaeco-cli"
+version = "0.1.0"
+description = "NovaEco Development and Build CLI"
+requires-python = ">=3.10"
+authors = [
+    { name = "NovaEco Team", email = "dev@novaeco.tech" }
+]
+dependencies = [
+    "grpcio-tools==1.76.0", 
+    "build==1.4.0",
+    "rich==13.5.3",
+    "requests==2.32.5",
+    "pyyaml==6.0.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    # Linters & Formatters
+    "ruff==0.4.4",
+    "mypy==1.19.0",
+    "types-requests==2.32.4.20260107",
+    "types-PyYAML==6.0.12.20250915",
+    
+    # Testing
+    "pytest==8.0.0",
+    "pytest-mock==3.12.0",
+    
+    # Security Scanners (SAST)
+    "bandit==1.9.3",
+    "semgrep==1.149.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[project.scripts]
+# This exposes the 'novaeco' command globally when installed
+novaeco = "novaeco_cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# --- Tool Configurations ---
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "I"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = false
+warn_unused_configs = true
+# We disable strict typing for the CLI scripts to allow rapid prototyping
+disallow_untyped_defs = false 
+ignore_missing_imports = true

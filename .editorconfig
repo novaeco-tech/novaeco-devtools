@@ -1,0 +1,34 @@
+# This is the top-most .editorconfig file.
+root = true
+
+# General rules for all files
+[*]
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+# Rules for Python files
+[*.py]
+indent_style = space
+indent_size = 4
+
+# Rules for YAML files (like compose.yml)
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+# Rules for shell scripts
+[*.sh]
+indent_style = space
+indent_size = 2
+
+# Rules for Markdown files
+# Often, trailing whitespace is meaningful (e.g., for hard line breaks), so disable trimming.
+[*.md]
+trim_trailing_whitespace = false
+
+# Rules for C++ (Core Engine)
+[*.{cpp,hpp,h,cc}]
+indent_style = space
+indent_size = 4

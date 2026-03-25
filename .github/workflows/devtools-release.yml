@@ -1,0 +1,108 @@
+name: NovaEco DevTools Release
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write    # To create GitHub Releases
+  packages: write    # To push to GHCR
+
+jobs:
+  release-cli:
+    runs-on: ubuntu-latest
+    outputs:
+      SHOULD_RELEASE: ${{ steps.check.outputs.SHOULD_RELEASE }}
+      TAG_NAME: ${{ steps.check.outputs.TAG_NAME }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Check if Version Bumped & Tag
+        id: check
+        run: |
+          # Look at the root pyproject.toml!
+          if [ ! -f pyproject.toml ]; then
+            echo "❌ Error: pyproject.toml file not found at root."
+            exit 1
+          fi
+
+          VERSION=$(grep -oP '^version\s*=\s*"\K[^"]+' pyproject.toml)
+
+          if [ -z "$VERSION" ]; then
+            echo "❌ Error: Could not parse version."
+            exit 1
+          fi
+
+          TAG_NAME="v$VERSION"
+          git config --global --add safe.directory $GITHUB_WORKSPACE
+
+          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+            echo "ℹ️ Tag $TAG_NAME already exists. Skipping release."
+            echo "SHOULD_RELEASE=false" >> $GITHUB_OUTPUT
+          else
+            echo "🚀 New version detected ($VERSION). Proceeding with Release."
+            echo "SHOULD_RELEASE=true" >> $GITHUB_OUTPUT
+            echo "TAG_NAME=$TAG_NAME" >> $GITHUB_OUTPUT
+            
+            # Export to ENV for the following steps in this job
+            echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+          fi
+
+      - name: Build CLI Artifacts
+        if: steps.check.outputs.SHOULD_RELEASE == 'true'
+        run: |
+          pip install build
+          cd novaeco-cli
+          python -m build --outdir ../dist
+
+      - name: Create GitHub Release
+        if: steps.check.outputs.SHOULD_RELEASE == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          name: "NovaEco DevTools ${{ env.TAG_NAME }}"
+          files: dist/*.whl
+          prerelease: false
+          generate_release_notes: true
+
+  release-docker:
+    needs: release-cli
+    # Only run if the CLI job decided a new release is needed
+    if: needs.release-cli.outputs.SHOULD_RELEASE == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [python, node, unified]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: github-actions[bot]
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push dev image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker/${{ matrix.image }}
+          file: ./docker/${{ matrix.image }}/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/novaeco-tech/novaeco-dev-${{ matrix.image }}:latest
+            ghcr.io/novaeco-tech/novaeco-dev-${{ matrix.image }}:${{ needs.release-cli.outputs.TAG_NAME }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

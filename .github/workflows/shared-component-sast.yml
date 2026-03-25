@@ -1,0 +1,68 @@
+name: "NovaEco Shared Component Security Scan (SAST)"
+
+on:
+  workflow_call:
+    secrets:
+      AUTOMATION_APP_ID:
+        required: true
+      AUTOMATION_APP_PRIVATE_KEY:
+        required: true
+
+# Add 'packages: read' so the token can pull the private DevContainer image
+permissions:
+  contents: read
+  security-events: write
+  packages: read
+
+jobs:
+  # ============================================================================
+  # JOB 1: Instant Secret Scanning (Gitleaks)
+  # ============================================================================
+  secret_scan:
+    name: Scan for Hardcoded Secrets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository (Full History)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # CRITICAL: Required to scan all commits in the PR
+
+      - name: Run Gitleaks via Docker
+        # Mounts the GitHub workspace to the container and runs the detect command.
+        # The --redact flag masks the actual secret in the CI logs to prevent further leakage.
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/workspace \
+          zricethezav/gitleaks:latest detect --source="/workspace" --verbose --redact
+
+  # ============================================================================
+  # JOB 2: Static Code Analysis (Bandit & Semgrep)
+  # ============================================================================
+  sast_scan:
+    name: Fast Scan (Bandit & Semgrep)
+    runs-on: ubuntu-latest
+    container:
+      # Using the Golden Image ensures environment parity
+      image: ghcr.io/novaeco-tech/novaeco-dev-unified:v0.1.0
+      options: --user root
+      credentials:
+        username: github-actions[bot]
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout repository (Shallow Clone)
+        uses: actions/checkout@v4
+
+      # Setup the NovaEco CLI Toolchain
+      # Point to the CENTRALIZED composite action in the DevTools repo!
+      - name: Unified Setup NovaEco Env
+        uses: novaeco-tech/novaeco-devtools/.github/actions/setup-novaeco@v0.1.0
+        with:
+          app-id: ${{ secrets.AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
+
+      # The CLI automatically discovers and targets domain/src, service/src, client/src, and api/src for Bandit,
+      # AND it targets the entire workspace for Semgrep (Python + C++)!
+      - name: Run Unified Security Scanners (Bandit & Semgrep)
+        run: |
+          echo "🛡️ Running SAST Scanners via NovaEco CLI..."
+          novaeco check security

@@ -1,0 +1,26 @@
+name: NovaEco DevTools CI
+
+on:
+  pull_request:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install CLI and Dev Dependencies
+        run: pip install "./novaeco-cli[dev]"
+          
+      - name: Run Pytest
+        run: |
+          cd novaeco-cli
+          pytest tests/

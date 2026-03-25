@@ -1,27 +1,39 @@
-# Start from a stable, slim Node.js base
-FROM node:20-bullseye-slim
+# ==============================================================================
+# NovaEco Node.js Development Image
+# ==============================================================================
+# Base: Debian 12 (Bookworm) - Matches 'unified' image base
+# Usage: Frontend Apps (novaeco-app-web) and Documentation Website
+# ==============================================================================
 
-# Install common system dependencies and dev tools
-# Added ca-certificates so git can verify HTTPS connections
-RUN apt-get update && apt-get install -y --no-install-recommends \
+FROM node:20-bookworm-slim
+
+# --- Environment Configuration ---
+# Ensure consistent behavior for tools that rely on python
+ENV PYTHONUNBUFFERED=1
+
+# --- 1. System Dependencies ---
+RUN apt-get update && apt-get install -y --no-install-recommends --fix-missing \
     ca-certificates \
     git \
+    openssh-client \
     curl \
     bash \
     zsh \
-    # Add any other common, system-level tools
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    # Install Python 3 (Will be 3.11+ on Bookworm) for NovaEco CLI support
+    python3 \
+    python3-pip \
+    python3-venv \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install common global Node.js tools
-# Pin versions to prevent "works on my machine" drift.
-# We explicitly list the versions we want to lock into the platform.
+# --- 2. Global Node Tools (Pinned) ---
 RUN npm install -g \
+    npm@latest \
     nodemon@3.1.11 \
-    typescript@5.9.3
+    typescript@5.9.3 \
+    pnpm@9.0.0
 
-# The base 'node' image already includes a non-root 'node' user
+# --- 3. User Configuration ---
+# Node image provides 'node' user (UID 1000) by default
 USER node
-
-# Set a default working directory
 WORKDIR /workspace
+CMD ["/bin/bash"]

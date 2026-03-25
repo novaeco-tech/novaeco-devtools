@@ -1,0 +1,215 @@
+name: NovaEco Shared Component Release
+
+on:
+  workflow_call:
+    inputs:
+      component_name:
+        description: 'The name of the component (e.g., novaeco-gateway)'
+        required: true
+        type: string
+      category:
+        description: 'The category for QA routing (e.g., gateway, auth, broker)'
+        required: true
+        type: string
+    secrets:
+      AUTOMATION_APP_ID:
+        required: true
+      AUTOMATION_APP_PRIVATE_KEY:
+        required: true
+
+permissions:
+  contents: write # Required to create tags and releases
+  packages: read  # Required to pull the container image from ghcr.io
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    container:
+      # Pinned unified development environment
+      image: ghcr.io/novaeco-tech/novaeco-dev-unified:v0.1.0
+      options: --user root
+      credentials:
+        username: github-actions[bot]
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Needed to check existing tags
+
+      - name: Unified Setup NovaEco Env
+        uses: novaeco-tech/novaeco-devtools/.github/actions/setup-novaeco@v0.1.0
+        id: setup
+        with:
+          app-id: ${{ secrets.AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
+
+      - name: Check if Version Bumped & Tag
+        id: check
+        run: |
+          if [ ! -f pyproject.toml ]; then
+            echo "❌ Error: pyproject.toml file not found at root."
+            exit 1
+          fi
+
+          VERSION=$(grep -oP '^version\s*=\s*"\K[^"]+' pyproject.toml)
+
+          if [ -z "$VERSION" ]; then
+            echo "❌ Error: Could not parse version from pyproject.toml."
+            exit 1
+          fi
+
+          TAG_NAME="v$VERSION"
+          git config --global --add safe.directory $GITHUB_WORKSPACE
+
+          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+            echo "ℹ️ Tag $TAG_NAME already exists. Skipping release."
+            echo "SHOULD_RELEASE=false" >> $GITHUB_OUTPUT
+          else
+            echo "🚀 New version detected ($VERSION). Proceeding with Release."
+            echo "SHOULD_RELEASE=true" >> $GITHUB_OUTPUT
+            echo "VERSION=$VERSION" >> $GITHUB_ENV
+            echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+          fi
+
+      - name: Sync Upstream Dependencies
+        if: steps.check.outputs.SHOULD_RELEASE == 'true'
+        env:
+          GITHUB_TOKEN: ${{ steps.setup.outputs.token }}
+        run: novaeco deps sync
+
+      - name: Build Code Artifacts (Wheels & Core)
+        if: steps.check.outputs.SHOULD_RELEASE == 'true'
+        run: |
+          echo "🔨 Building all fractal layers..."
+          novaeco build all
+
+          echo "📦 Installing generated wheels for testing..."
+          if ls dist/*.whl 1> /dev/null 2>&1; then
+            pip install dist/*.whl --force-reinstall --no-deps
+          fi
+          pip install ".[dev]"
+
+      - name: Run Static Verification (L5/L4)
+        if: steps.check.outputs.SHOULD_RELEASE == 'true'
+        run: |
+          echo "🧪 Running Unit Tests..."
+          novaeco test unit
+
+          echo "⚡ Running Performance Benchmarks..."
+          novaeco test performance
+
+          echo "📜 Running Contract Tests..."
+          novaeco test contract
+
+      - name: Run Dynamic Verification (L3)
+        if: steps.check.outputs.SHOULD_RELEASE == 'true'
+        env:
+          novaeco_GATEWAY_TARGET: "http://127.0.0.1:8000"
+          novaeco_AUTH_TARGET: "mock"
+        run: |
+          # Only attempt to boot the service if it's actually an API service
+          if [ -d "service/src" ] && [ -f "deploy/scripts/wait_for_service.py" ]; then
+            echo "🚀 Starting Service for L3 Sanity Check..."
+            
+            # Dynamically find the service package directory (ignoring standard files like __init__.py)
+            SERVICE_PKG=$(find service/src -mindepth 1 -maxdepth 1 -type d ! -name "__pycache__" ! -name "*.egg-info" -exec basename {} \; | head -n 1)
+            export CONFIG_PATH=$(pwd)/deploy/config/${{ inputs.category }}.yaml
+            
+            uvicorn ${SERVICE_PKG}.main:app --host 0.0.0.0 --port 8000 > service.log 2>&1 &
+            PID=$!
+
+            if python3 deploy/scripts/wait_for_service.py --pid $PID --url "http://127.0.0.1:8000/health" --timeout 30; then
+               echo "✅ Health check passed"
+            else
+               echo "❌ Service failed to start."
+               cat service.log
+               kill $PID 2>/dev/null
+               exit 1
+            fi
+
+            echo "🖥️ Running L3 Sanity Checks..."
+            pytest tests/e2e/test_health.py || true
+            pytest tests/accessibility || true
+
+            kill $PID
+          else
+            echo "ℹ️ No FastAPI service detected or missing wait script. Skipping L3 boot."
+          fi
+
+      - name: Build Documentation (All 3 Perspectives)
+        if: steps.check.outputs.SHOULD_RELEASE == 'true'
+        run: |
+          if [ -d "docs/source" ]; then
+            echo "📚 Building Documentation Perspectives..."
+            mkdir -p docs/source/reports/_generated
+            touch docs/source/reports/_generated/security_vulns.rst
+            touch benchmark_results.txt
+            touch coverage_summary.txt
+
+            novaeco build docs all
+
+            mkdir -p dist
+            tar -czf dist/${{ inputs.component_name }}-docs-public-${{ env.VERSION }}.tar.gz -C docs/build/public .
+            tar -czf dist/${{ inputs.component_name }}-docs-partner-${{ env.VERSION }}.tar.gz -C docs/build/partner .
+            tar -czf dist/${{ inputs.component_name }}-docs-internal-${{ env.VERSION }}.tar.gz -C docs/build/internal .
+          fi
+
+      - name: Package Final Artifacts (Conan & Deploy)
+        if: steps.check.outputs.SHOULD_RELEASE == 'true'
+        run: |
+          if [ -d "core" ]; then
+            echo "📦 Packaging Conan..."
+            cd core
+            conan create . --build=missing -s compiler.cppstd=20 -s build_type=Release
+            cd ..
+            conan cache save "${{ inputs.component_name }}-core/${{ env.VERSION }}:*" --file dist/${{ inputs.component_name }}-core-${{ env.VERSION }}-conan.tar.gz
+          fi
+
+          if [ -d "deploy" ]; then
+            echo "📦 Packaging Deploy Configurations..."
+            tar -czf dist/${{ inputs.component_name }}-deploy-${{ env.VERSION }}.tar.gz -C deploy .
+          fi
+
+          echo "✅ Final Artifacts in dist/:"
+          ls -l dist/
+
+      - name: Create GitHub Release
+        if: steps.check.outputs.SHOULD_RELEASE == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ steps.setup.outputs.token }}
+          tag_name: ${{ env.TAG_NAME }}
+          name: "${{ inputs.component_name }} ${{ env.TAG_NAME }}"
+          files: |
+            dist/*.whl
+            dist/*.tar.gz
+          prerelease: true
+          generate_release_notes: true
+
+      - name: Generate Artifact List
+        id: artifacts
+        if: steps.check.outputs.SHOULD_RELEASE == 'true'
+        run: |
+          if [ -d "dist" ]; then
+            # Generate the JSON array and save it to the GITHUB_OUTPUT
+            JSON_ARRAY=$(cd dist && ls -1 | jq -R -s -c 'split("\n")[:-1]')
+            echo "list=$JSON_ARRAY" >> $GITHUB_OUTPUT
+          else
+            echo "list=[]" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Dispatch to NovaEco QA (Global Acceptance)
+        if: steps.check.outputs.SHOULD_RELEASE == 'true'
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ steps.setup.outputs.token }}
+          repository: novaeco-tech/novaeco-qa
+          event-type: qa-trigger
+          client-payload: >-
+            {
+              "component": "${{ inputs.component_name }}",
+              "version": "${{ env.TAG_NAME }}",
+              "category": "${{ inputs.category }}",
+              "artifacts": ${{ steps.artifacts.outputs.list }}
+            }

@@ -1,0 +1,27 @@
+# Default: Enforce LF for everything (Linux/Docker standard)
+* text=auto eol=lf
+
+# Windows Scripts: Must keep CRLF to execute
+*.{cmd,[cC][mM][dD]} text eol=crlf
+*.{bat,[bB][aA][tT]} text eol=crlf
+
+# --- Binary Artifacts (Do not modify/diff) ---
+# Python & C++ Build Artifacts
+*.whl     binary
+*.so      binary
+*.a       binary
+*.dll     binary
+*.exe     binary
+*.pyc     binary
+
+# Archives
+*.tar.gz  binary
+*.zip     binary
+
+# Documentation Images
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.ico     binary
+*.svg     text
