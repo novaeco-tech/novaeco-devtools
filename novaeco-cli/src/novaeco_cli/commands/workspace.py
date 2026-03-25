@@ -13,12 +13,13 @@ WORKSPACE_FILENAME = "novaeco.code-workspace"
 # UPDATED: Matches the new v2026 Folder Structure
 TOPIC_PRIORITY = [
     "meta",       # .github
-    "core",       # novaeco (The Kernel)
+    "core",       # novaeco, novaeco-auth, novaeco-gateway, novaeco-ui, novaeco-website
+    "ops",        # novaeco-operations, novaeco-runtime, novaeco-backup
     "tooling",    # novaeco-devtools
-    "governance", # novaeco-qa, novaeco-releases
+    "governance", # novaeco-qa, novaeco-releases, novaeco-sentinel
     "enabler",    # novamind, novatrade...
     "sector",     # novaagro, novawater...
-    "product",    # product-novalab...
+    "product",    # product-novalab, product-duras-agv...
     "worker"      # workers (kept at bottom for cleanliness)
 ]
 
