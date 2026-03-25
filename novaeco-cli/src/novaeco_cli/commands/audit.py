@@ -24,7 +24,7 @@ PY_TEST_VERIFY_PATTERN = re.compile(r'@(?:pytest\.mark\.)?requirement\(\s*["\'](
 CPP_TEST_VERIFY_PATTERN = re.compile(r"//\s*([A-Z]+_[A-Z_]+_\d{4})")
 
 # Matches Gherkin tags: @USECASE_QA_0001
-FEATURE_TEST_VERIFY_PATTERN = re.compile(r'@([A-Z]+_[A-Z_]+_\d{4})')
+FEATURE_TEST_VERIFY_PATTERN = re.compile(r"@([A-Z]+_[A-Z_]+_\d{4})")
 
 
 def register_subcommand(subparsers):
@@ -67,9 +67,7 @@ def load_schema(path):
             sys.exit(1)
 
     # Use the GitHub API raw media type to get the file contents
-    url = (
-        "https://api.github.com/repos/novaeco-tech/novaeco/contents/docs/source/architecture/templates/component-schema.yaml"
-    )
+    url = "https://api.github.com/repos/novaeco-tech/novaeco/contents/docs/source/architecture/templates/component-schema.yaml"
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3.raw"}
 
     try:
@@ -163,27 +161,32 @@ def audit_traceability(path, is_global=False):
     # 2. Scan for Verifications (Python, C++, and Gherkin Features)
     code_pattern = os.path.join(path, "**", "*.*") if not is_global else os.path.join(path, "..", "**", "*.*")
     for file_path in glob.glob(code_pattern, recursive=True):
-        if not (file_path.endswith(".py") or file_path.endswith(".cpp") or file_path.endswith(".hpp") or file_path.endswith(".feature")):
+        if not (
+            file_path.endswith(".py")
+            or file_path.endswith(".cpp")
+            or file_path.endswith(".hpp")
+            or file_path.endswith(".feature")
+        ):
             continue
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
-                
+
                 # Find Python tests
                 if file_path.endswith(".py"):
                     for req_id in PY_TEST_VERIFY_PATTERN.findall(content):
                         verifications[req_id].append(os.path.relpath(file_path, path))
-                
+
                 # Find C++ tests/logic
                 if file_path.endswith(".cpp") or file_path.endswith(".hpp"):
                     for req_id in CPP_TEST_VERIFY_PATTERN.findall(content):
                         verifications[req_id].append(os.path.relpath(file_path, path))
-                        
+
                 # Find BDD Feature tags
                 if file_path.endswith(".feature"):
                     for req_id in FEATURE_TEST_VERIFY_PATTERN.findall(content):
                         verifications[req_id].append(os.path.relpath(file_path, path))
-                        
+
         except Exception:
             continue
 
