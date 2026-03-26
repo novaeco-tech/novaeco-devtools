@@ -1,6 +1,7 @@
 import argparse
 import fnmatch
 import os
+import subprocess
 import sys
 
 # --- Configuration & Defaults ---
@@ -85,6 +86,9 @@ def register_subcommand(subparsers):
   
   # Export a specific file
   novaeco export repos/novaeco-operations/README.md
+
+  # Export files along with their net git diff since a specific date
+  novaeco export ./repos --match "README.*" --output readmes-export.txt --changes-since 2026-01-01
 """
     parser = subparsers.add_parser(
         "export",
@@ -103,6 +107,9 @@ def register_subcommand(subparsers):
     parser.add_argument("--match", help="Only export files matching this glob pattern (e.g., README.*)")
 
     parser.add_argument("--no-defaults", action="store_true", help="Ignore default exclusion lists")
+
+    # Git integration
+    parser.add_argument("--changes-since", help="Include net git diff since a specific date (e.g., 2026-01-01)")
 
     # Configuration flags
     parser.add_argument("--exclude-dirs", nargs="+", default=[], help="Add directories to exclude")
@@ -129,8 +136,27 @@ def is_excluded(file_path, exclude_paths, exclude_exts):
     return False
 
 
-def process_file(file_path):
-    """Reads a file and returns formatted string, or None if unreadable."""
+def get_git_diff(file_path, since_date):
+    """Fetches the net git diff for a file since the specified date."""
+    file_dir = os.path.dirname(os.path.abspath(file_path))
+    file_name = os.path.basename(file_path)
+
+    diff_cmd = ["git", "diff", f"HEAD@{{{since_date}}}..HEAD", "--", file_name]
+
+    try:
+        result = subprocess.run(diff_cmd, cwd=file_dir, capture_output=True, text=True, check=False)
+        if result.stdout:
+            return result.stdout
+        elif result.stderr:
+            return f"(Git output/error: {result.stderr.strip()})"
+        else:
+            return "(No changes since this date)"
+    except Exception as e:
+        return f"(Failed to fetch git diff: {str(e)})"
+
+
+def process_file(file_path, changes_since=None):
+    """Reads a file and returns formatted string, appending git diff if requested."""
     try:
         # Try reading as UTF-8
         with open(file_path, "r", encoding="utf-8") as f:
@@ -140,7 +166,14 @@ def process_file(file_path):
         header += f"### FILE: {file_path}\n"
         header += "=" * 80 + "\n\n"
 
-        return header + content + "\n\n"
+        output_str = header + content + "\n\n"
+
+        # Append Git Diff if requested
+        if changes_since:
+            output_str += "=== NET GIT DIFF ===\n\n"
+            output_str += get_git_diff(file_path, changes_since) + "\n\n"
+
+        return output_str
     except (UnicodeDecodeError, Exception):
         # Skip binary or unreadable files that slipped through extension checks
         return None
@@ -164,6 +197,8 @@ def execute(args):
     print(f"📄 Output target: {output_file}")
     if args.match:
         print(f"🔍 Pattern match: {args.match}")
+    if args.changes_since:
+        print(f"⏳ Appending git diffs since: {args.changes_since}")
 
     if not os.path.exists(root_path):
         print(f"❌ Error: Path '{root_path}' does not exist.")
@@ -174,7 +209,7 @@ def execute(args):
     with open(output_file, "w", encoding="utf-8") as out:
         # CASE 1: Single File
         if os.path.isfile(root_path):
-            content = process_file(root_path)
+            content = process_file(root_path, args.changes_since)
             if content:
                 out.write(content)
                 files_processed = 1
@@ -203,7 +238,7 @@ def execute(args):
                         continue
 
                     print(f"   + {rel_path}")
-                    content = process_file(full_path)
+                    content = process_file(full_path, args.changes_since)
 
                     if content:
                         out.write(content)
