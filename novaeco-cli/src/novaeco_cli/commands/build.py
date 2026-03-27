@@ -50,6 +50,7 @@ def register_subcommand(subparsers):
     # Web/Node
     p_web = build_subs.add_parser("web", help="Package Web/Node Projects")
     p_web.add_argument("--build-dir", default="build", help="Directory where npm output is generated")
+    p_web.add_argument("--out-dir", default="dist", help="Output directory for the final tarball (Output)")
 
     # Documentation
     p_docs = build_subs.add_parser("docs", help="Build Sphinx documentation perspectives")
@@ -231,7 +232,7 @@ def build_web(args):
     run_cmd(["npm", "ci"])
     run_cmd(["npm", "run", "build"])
 
-    dist_dir = "dist"
+    dist_dir = args.out_dir 
     os.makedirs(dist_dir, exist_ok=True)
     tar_name = f"{get_service_name()}.tar.gz"
     tar_path = os.path.join(dist_dir, tar_name)
