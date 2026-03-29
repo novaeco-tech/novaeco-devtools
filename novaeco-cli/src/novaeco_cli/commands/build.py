@@ -232,7 +232,7 @@ def build_web(args):
     run_cmd(["npm", "ci"])
     run_cmd(["npm", "run", "build"])
 
-    dist_dir = args.out_dir 
+    dist_dir = args.out_dir
     os.makedirs(dist_dir, exist_ok=True)
     tar_name = f"{get_service_name()}.tar.gz"
     tar_path = os.path.join(dist_dir, tar_name)
