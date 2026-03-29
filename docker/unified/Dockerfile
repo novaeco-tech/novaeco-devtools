@@ -6,7 +6,7 @@
 # Usage: CI/CD Pipelines and Local DevContainers
 # ==============================================================================
 
-FROM python:3.11-bookworm
+FROM python:3.11.14-bookworm
 
 # --- Environment Configuration ---
 ENV PYTHONUNBUFFERED=1 \
